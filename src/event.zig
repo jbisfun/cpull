@@ -22,6 +22,7 @@ pub const Attachment = @import("event/Attachment.zig");
 pub const Assignment = @import("event/Assignment.zig");
 pub const Patch = @import("event/Patch.zig");
 pub const PatchRev = @import("event/PatchRev.zig");
+pub const Stack = @import("event/Stack.zig");
 
 // the most bytes an event's serialized form may hold
 pub const max_event_size: usize = 100 * 1024;
@@ -373,6 +374,7 @@ pub const EventKind = enum {
     assign,
     patchrev,
     patch,
+    stack,
 };
 
 pub const RepoRole = enum {
@@ -389,7 +391,7 @@ pub const RepoRole = enum {
                 else => false,
             },
             .repo => switch (kind) {
-                .discuss, .issue, .comment, .attach, .assign, .patchrev, .patch => true,
+                .discuss, .issue, .comment, .attach, .assign, .patchrev, .patch, .stack => true,
                 else => false,
             },
             .fork => switch (kind) {
@@ -424,6 +426,7 @@ pub const Event = union(EventKind) {
     assign: ?Assignment,
     patchrev: ?PatchRev,
     patch: ?Patch,
+    stack: ?Stack,
 };
 
 // a file committed alongside its event
@@ -578,6 +581,12 @@ pub const EventWithId = struct {
                     else
                         null,
                 },
+                .stack => .{
+                    .stack = if (json_event.data) |value|
+                        try std.json.parseFromValueLeaky(Stack, arena.allocator(), value, .{ .ignore_unknown_fields = true })
+                    else
+                        null,
+                },
             },
         };
     }
@@ -631,6 +640,7 @@ pub fn remove(
         .assign => .{ .assign = null },
         .patchrev => .{ .patchrev = null },
         .patch => .{ .patch = null },
+        .stack => .{ .stack = null },
     };
     try consume(host, role, repo_kind, repo_opts, io, allocator, repo, events_ref, &.{.{
         .id = std.fmt.bytesToHex(id.*, .lower),
@@ -1563,6 +1573,16 @@ fn consumeWithScratch(
                     } else null;
                     try Patch.consume(DB, repo_opts.hash, haxy_moment, &current_event_id, record_maybe, &arena, &repo_event_oid);
                 },
+                .stack => |event_maybe| {
+                    const record_maybe: ?Stack.Record = if (event_maybe) |event| .{
+                        .event = event,
+                        .author_email = authorEmail(commit_object.content.commit.metadata.author orelse ""),
+                        .created_timestamp = commit_object.content.commit.metadata.timestamp,
+                        .created_order = event_order,
+                        .updated_order = event_order,
+                    } else null;
+                    try Stack.consume(DB, repo_opts.hash, haxy_moment, &current_event_id, record_maybe, &arena, &repo_event_oid);
+                },
             }
         }
 
@@ -2168,6 +2188,7 @@ pub fn readAuthorEmail(
         .assign => Assignment.record_map_key,
         .patchrev => PatchRev.record_map_key,
         .patch => Patch.record_map_key,
+        .stack => Stack.record_map_key,
         .user, .repo, .fork, .grant, .notify => return null,
     };
 

@@ -327,7 +327,7 @@ const Builder = struct {
         if (end == 0) return "";
         const data = b.data orelse {
             if (dest[0] != '/') return "";
-            const route = ui.RoutablePage.fromUrl(dest[0..end]) orelse return "";
+            const route = ui.RoutablePage.fromUrlFor(b.session.data, dest[0..end]) orelse return "";
             return aa.print("a:{s}", .{try route.toUrl(b.page_arena)});
         };
         const decoded = std.Uri.percentDecodeInPlace(try aa.dupe(u8, dest[0..end]));

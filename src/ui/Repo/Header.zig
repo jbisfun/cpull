@@ -110,7 +110,7 @@ pub const View = struct {
         }
 
         // local routes carry no identity, so their urls come out elided
-        const identity = if (session.data.host_kind == .local) "" else try aa.print("{s}:{s}", .{ data.owner_name, data.name });
+        const identity = if (session.data.host_kind == .local and session.data.workspace == null) "" else try aa.print("{s}:{s}", .{ data.owner_name, data.name });
 
         // title links to the repo's files root (the bare route, so it resolves
         // to the default branch).

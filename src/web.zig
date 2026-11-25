@@ -25,6 +25,7 @@ const form_flash_cookie = "haxy_form_flash";
 const local_flash_cookie = "haxy_local_flash";
 const local_required_title_prefix = "required_title:";
 const local_sync_failure_prefix = "sync:";
+const local_workspace_prefix = "workspace:";
 const local_assignment_prefix = "assignment:";
 
 pub const Embed = struct {
@@ -55,10 +56,29 @@ const embeds = [_]Embed{
     .{ .path = "haxy.wasm", .content_type = "application/wasm", .body = @embedFile("haxy.wasm") },
 };
 
+// local mode's repos: a single repo, or every repo of a pull workspace
+pub const LocalHost = struct {
+    // the repo plain local mode views
+    source: ?ui.RepoSource = null,
+    // the workspace workspace mode views, whose repo urls carry their identity
+    workspace: ?*const ui.WorkspaceHost = null,
+    workspace_name: ?[]const u8 = null,
+
+    // the repo a request's url base names: "" in plain local mode, the
+    // "/<workspace>:<repo>" identity in workspace mode
+    pub fn sourceFor(self: LocalHost, repo_base: []const u8) ?ui.RepoSource {
+        if (self.workspace) |workspace| {
+            const identity = repoBaseIdentity(repo_base) orelse return null;
+            return workspace.source(workspace.ctx, identity);
+        }
+        return if (repo_base.len == 0) self.source else null;
+    }
+};
+
 // what a web request is served from: the multi-user server (admin repo +
-// login sessions) or a single local repo.
+// login sessions) or local mode.
 pub const Host = union(evt.HostKind) {
-    local: ui.RepoSource,
+    local: LocalHost,
     server: struct {
         admin_repo_path: []const u8,
         users_path: []const u8,
@@ -103,7 +123,7 @@ fn repoBaseIdentity(repo_base: []const u8) ?[]const u8 {
 fn routeFromUrl(host: Host, path: []const u8) ?ui.RoutablePage {
     return switch (host) {
         .server => ui.RoutablePage.fromUrl(path),
-        .local => ui.RoutablePage.fromUrlLocal(path),
+        .local => |local| if (local.workspace != null) ui.RoutablePage.fromUrlWorkspace(path) else ui.RoutablePage.fromUrlLocal(path),
     };
 }
 
@@ -120,7 +140,7 @@ fn requestRepoSource(io: std.Io, allocator: std.mem.Allocator, host: Host, repo_
                 .owned_path = path,
             };
         },
-        .local => |source| if (repo_base.len == 0) .{ .source = source } else null,
+        .local => |local| if (local.sourceFor(repo_base)) |source| .{ .source = source } else null,
     };
 }
 
@@ -234,7 +254,7 @@ fn handleRequest(
                 }
             },
             .local => |local| {
-                const PostRoute = enum { new, edit, remove, open, close, resolve, sync, attach, assign, unassign, search };
+                const PostRoute = enum { new, edit, remove, open, close, resolve, sync, attach, assign, unassign, search, merge };
                 inline for (@typeInfo(PostRoute).@"enum".field_names) |name| {
                     const suffix = "/" ++ name;
                     if (std.mem.endsWith(u8, path, suffix)) {
@@ -247,6 +267,7 @@ fn handleRequest(
                             .close => handleThreadStatus(io, request, allocator, base, host, false),
                             .resolve => handleThreadResolve(io, request, allocator, base, host),
                             .sync => handleSync(io, request, allocator, base, local),
+                            .merge => handleWorkspaceMerge(request, allocator, base, local),
                             .attach => handleAttach(io, request, allocator, base, host),
                             .assign => handleAssign(io, request, allocator, base, host),
                             .unassign => handleUnassign(io, request, allocator, base, host),
@@ -284,7 +305,7 @@ fn handleRequest(
 
     // raw files and attachments serve bytes rather than a page, so they are
     // matched before the routable pages
-    if (ui.RoutablePage.fromRawUrl(path, host == .local)) |raw| return serveRaw(io, request, allocator, raw, host);
+    if (ui.RoutablePage.fromRawUrl(path, host == .local and host.local.workspace == null)) |raw| return serveRaw(io, request, allocator, raw, host);
     if (attachmentRequest(path)) |attachment| return serveAttachment(io, request, allocator, attachment, host);
 
     // embeds are matched before the pages so an embed's name never reads as a user
@@ -325,6 +346,7 @@ fn handleRequest(
         var form_cookie_seen = false;
         var local_flash_seen = false;
         var sync_failure: ?[]const u8 = null;
+        var workspace_flash: ?[]const u8 = null;
         var sync_failure_allocated: ?[]u8 = null;
         defer if (sync_failure_allocated) |value| allocator.free(value);
         // backs the cookie a claimed auto-login sets
@@ -374,6 +396,8 @@ fn handleRequest(
                         const value = try allocator.dupe(u8, raw[local_sync_failure_prefix.len..]);
                         sync_failure_allocated = value;
                         sync_failure = std.Uri.percentDecodeInPlace(value);
+                    } else if (std.mem.startsWith(u8, raw, local_workspace_prefix)) {
+                        workspace_flash = std.Uri.percentDecodeInPlace(try form_arena.allocator().dupe(u8, raw[local_workspace_prefix.len..]));
                     }
                 }
             },
@@ -389,6 +413,11 @@ fn handleRequest(
             .sync_failure = sync_failure,
             .current_page = current_page,
             .host_kind = std.meta.activeTag(host),
+            .workspace = switch (host) {
+                .local => |local| local.workspace_name,
+                .server => null,
+            },
+            .workspace_flash = workspace_flash,
             .git_http_url = git_http_url,
             .git_ssh_url = git_ssh_url,
             .git_ssh_prefix = git_ssh_prefix,
@@ -593,7 +622,13 @@ fn authorizeWrite(
 ) !?ui.Actor {
     const server = switch (host) {
         .server => |server| server,
-        .local => |src| return .{ .author = try ui.localAuthor(src, io, allocator, arena), .role = .owner },
+        .local => |local| {
+            const src = local.sourceFor(repo_base) orelse {
+                try respondRepoNotFound(request);
+                return null;
+            };
+            return .{ .author = try ui.localAuthor(src, io, allocator, arena), .role = .owner };
+        },
     };
     const authorization: ui.Authorization = blk: {
         const user_id = requestUserId(request, server.session_store) orelse break :blk .login_required;
@@ -2461,15 +2496,17 @@ fn handleSync(
     request: *std.http.Server.Request,
     allocator: std.mem.Allocator,
     base: []const u8,
-    source: ui.RepoSource,
+    local: LocalHost,
 ) !void {
-    if (base.len != 0) {
+    const source = local.sourceFor(base) orelse {
         try request.respond("not found", .{
             .status = .not_found,
             .extra_headers = &.{.{ .name = "content-type", .value = "text/plain" }},
         });
         return;
-    }
+    };
+    const events_location = try allocator.print("{s}/events", .{base});
+    defer allocator.free(events_location);
 
     var owned_failure: ?[]u8 = null;
     defer if (owned_failure) |message| allocator.free(message);
@@ -2493,7 +2530,7 @@ fn handleSync(
         try request.respond("", .{
             .status = .see_other,
             .extra_headers = &.{
-                .{ .name = "location", .value = "/events" },
+                .{ .name = "location", .value = events_location },
                 .{ .name = "set-cookie", .value = cookie },
             },
         });
@@ -2503,8 +2540,41 @@ fn handleSync(
     try request.respond("", .{
         .status = .see_other,
         .extra_headers = &.{
-            .{ .name = "location", .value = "/events" },
+            .{ .name = "location", .value = events_location },
             .{ .name = "set-cookie", .value = local_flash_cookie ++ "=; Path=/; Max-Age=0" },
+        },
+    });
+}
+
+// merge the stack a workspace stack page's url names, then show that page
+// again with what the merge reported
+fn handleWorkspaceMerge(
+    request: *std.http.Server.Request,
+    allocator: std.mem.Allocator,
+    base: []const u8,
+    local: LocalHost,
+) !void {
+    const workspace = local.workspace orelse return respondRepoNotFound(request);
+    // the body carries nothing, but it must be read before responding
+    const body = try readFormBody(request, allocator);
+    allocator.free(body);
+    const route = ui.RoutablePage.fromUrlWorkspace(base) orelse return respondRepoNotFound(request);
+    if (route != .workspace or route.workspace.view != .stack) return respondRepoNotFound(request);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const message = workspace.merge(workspace.ctx, &arena, route.workspace.selected.slice()) catch |err| @errorName(err);
+    var encoded: std.Io.Writer.Allocating = .init(arena.allocator());
+    try std.Uri.Component.percentEncode(&encoded.writer, message, struct {
+        fn isUnreserved(c: u8) bool {
+            return std.ascii.isAlphanumeric(c) or c == '-' or c == '.' or c == '_' or c == '~';
+        }
+    }.isUnreserved);
+    const cookie = try arena.allocator().print(local_flash_cookie ++ "=" ++ local_workspace_prefix ++ "{s}; Path=/; HttpOnly; SameSite=Strict", .{encoded.written()});
+    try request.respond("", .{
+        .status = .see_other,
+        .extra_headers = &.{
+            .{ .name = "location", .value = base },
+            .{ .name = "set-cookie", .value = cookie },
         },
     });
 }
@@ -2549,7 +2619,8 @@ fn renderPage(
             .data = session_data,
             .arena = &page_arena,
             .page_arena = &page_arena,
-            .local = local,
+            .local = local.source,
+            .workspace_host = local.workspace,
         },
     };
     session.io = io;
@@ -3179,6 +3250,7 @@ fn appendTitle(allocator: std.mem.Allocator, out: *std.ArrayList(u8), page: *con
         .user => |*user| .{ "", user.user.name },
         .repo => |*repo| .{ repo.header.owner_name, repo.header.name },
         .fork => |*fork_page| .{ fork_page.header.forker_name, fork_page.header.name },
+        .workspace => |*ws| .{ "", ws.name },
         .home, .not_found => .{ "", "" },
     };
     try appendEscapedHtml(allocator, out, frontend.site_name);

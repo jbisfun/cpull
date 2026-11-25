@@ -248,7 +248,8 @@ pub fn init(
         repo = .{
             .event = .{
                 .user_id = @splat('0'),
-                .name = try arena.allocator().dupe(u8, std.Io.Dir.path.basename(local.path)),
+                // a workspace's repos are named by their route, like a server's
+                .name = if (session.data.workspace != null) repo_identity.name else try arena.allocator().dupe(u8, std.Io.Dir.path.basename(local.path)),
                 .description = "",
                 // local mode shows every tab
                 .discuss_role = .read,
@@ -256,7 +257,7 @@ pub fn init(
                 .patch_role = .read,
             },
         };
-        owner_name = "";
+        owner_name = if (session.data.workspace != null) repo_identity.owner else "";
     } else {
         const haxy_moment = session.haxy_moment orelse return error.NoMoment;
         const io = session.io orelse return error.NoMoment;

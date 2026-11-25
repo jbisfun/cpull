@@ -39,6 +39,7 @@ pub const UserKeys = @import("./ui/UserKeys.zig");
 pub const UserNotifications = @import("./ui/UserNotifications.zig");
 pub const UserLogin = @import("./ui/UserLogin.zig");
 pub const Delete = @import("./ui/Delete.zig");
+pub const Workspace = @import("./ui/Workspace.zig");
 pub const widget = @import("./ui/widget.zig");
 pub const Widget = widget.Widget;
 
@@ -91,6 +92,7 @@ pub const PageKind = enum {
     user,
     repo,
     fork,
+    workspace,
     not_found,
 };
 
@@ -99,9 +101,14 @@ pub const Page = union(PageKind) {
     user: User,
     repo: Repo,
     fork: Fork,
+    workspace: Workspace,
     not_found,
 
     pub fn init(arena: *std.heap.ArenaAllocator, session: *Session, route: RoutablePage) !Page {
+        // a workspace views one of its repos per page, so the repo comes from the route
+        if (session.workspace_host) |host| {
+            session.local = if (route.repoIdentity()) |identity| host.source(host.ctx, identity) orelse return error.NotFound else null;
+        }
         // the repo page can build without a moment in local mode; the home and
         // user pages always read from the admin db.
         return switch (route.parent()) {
@@ -126,6 +133,10 @@ pub const Page = union(PageKind) {
             .fork => switch (route) {
                 .fork_patch, .fork_diff, .fork_files, .fork_commits, .fork_delete, .fork_repo_new, .fork_user_new, .fork_user => .{ .fork = try Fork.init(arena, session, route) },
                 else => return error.UnexpectedRoute,
+            },
+            .workspace => blk: {
+                const host = session.workspace_host orelse return error.NotFound;
+                break :blk .{ .workspace = try host.page(host.ctx, arena, session, route.workspace) };
             },
             .not_found => .not_found,
         };
@@ -231,9 +242,19 @@ pub const RoutablePage = union(enum) {
     fork_repo_new: ForkRoute,
     fork_user_new: ForkRoute,
     fork_user: struct { fork: ForkRoute, tab: UserTab = .{} },
+    // a pull workspace's own pages (workspace mode only), under /home
+    workspace: WorkspaceRoute,
     not_found,
 
     pub const default: RoutablePage = .home_about;
+
+    pub const WorkspaceView = enum { home, issues, patches, stacks, stack };
+
+    pub const WorkspaceRoute = struct {
+        view: WorkspaceView = .home,
+        // the stack a stack page shows
+        selected: Array(evt.event_id_size * 2) = .{},
+    };
 
     pub const RefKind = enum { branch, tag };
 
@@ -1177,6 +1198,13 @@ pub const RoutablePage = union(enum) {
     pub fn toUrl(self: RoutablePage, arena: *std.heap.ArenaAllocator) ![]const u8 {
         return switch (self) {
             .home_about => "/",
+            .workspace => |w| switch (w.view) {
+                .home => "/",
+                .issues => "/" ++ home_segment ++ "/issues",
+                .patches => "/" ++ home_segment ++ "/patches",
+                .stacks => "/" ++ home_segment ++ "/stacks",
+                .stack => try arena.allocator().print("/" ++ home_segment ++ "/stacks/{s}", .{w.selected.slice()}),
+            },
             .home_users => |u| blk: {
                 var out: std.Io.Writer.Allocating = .init(arena.allocator());
                 try out.writer.writeAll("/" ++ home_segment ++ "/users");
@@ -1533,6 +1561,34 @@ pub const RoutablePage = union(enum) {
         return repoSubRoute("", path[1..]);
     }
 
+    // parse a workspace-mode url: "/" and "/home/..." are the workspace's own
+    // pages, and each repo's pages carry their "<workspace>:<repo>" identity
+    // as on a server
+    pub fn fromUrlWorkspace(path: []const u8) ?RoutablePage {
+        if (std.mem.eql(u8, path, "/")) return .{ .workspace = .{} };
+        const home = "/" ++ home_segment ++ "/";
+        if (std.mem.startsWith(u8, path, home)) {
+            const rest = std.mem.trimEnd(u8, path[home.len..], "/");
+            const views = [_]struct { []const u8, WorkspaceView }{ .{ "issues", .issues }, .{ "patches", .patches }, .{ "stacks", .stacks } };
+            for (views) |v| if (std.mem.eql(u8, rest, v[0])) return .{ .workspace = .{ .view = v[1] } };
+            if (std.mem.startsWith(u8, rest, "stacks/")) {
+                const id = rest["stacks/".len..];
+                if (id.len != evt.event_id_size * 2) return null;
+                for (id) |c| if (!std.ascii.isHex(c)) return null;
+                return .{ .workspace = .{ .view = .stack, .selected = Array(evt.event_id_size * 2).from(id) orelse return null } };
+            }
+            return null;
+        }
+        const route = fromUrl(path) orelse return null;
+        return if (route.parent() == .repo) route else null;
+    }
+
+    // a url under the scheme of the session `data` describes
+    pub fn fromUrlFor(data: Session.Data, path: []const u8) ?RoutablePage {
+        if (data.workspace != null) return fromUrlWorkspace(path);
+        return if (data.host_kind == .local) fromUrlLocal(path) else fromUrl(path);
+    }
+
     // a file's bytes, which `RepoLocation.rawUrl` links to
     pub const RawFile = struct {
         // "/<owner>:<name>", or "" in local mode
@@ -1638,6 +1694,7 @@ pub const RoutablePage = union(enum) {
                 const f = self.forkRoute() orelse break :blk self;
                 break :blk forkPatchRoute(f.name.slice(), f.id.slice()) orelse self;
             },
+            .workspace => .{ .workspace = .{} },
             .not_found => self,
         };
     }
@@ -1648,6 +1705,7 @@ pub const RoutablePage = union(enum) {
             .user_repos, .user_forks, .user_repo_new, .user_user_new, .user_user => .user,
             .repo_files, .repo_commits, .repo_diff, .repo_refs, .repo_issues, .repo_patches, .repo_discussions, .repo_events, .repo_undo, .repo_settings, .repo_members, .repo_branches, .repo_delete, .repo_repo_new, .repo_user_new, .repo_user => .repo,
             .fork_patch, .fork_diff, .fork_files, .fork_commits, .fork_delete, .fork_repo_new, .fork_user_new, .fork_user => .fork,
+            .workspace => .workspace,
             .not_found => .not_found,
         };
     }
@@ -2118,8 +2176,14 @@ pub const RoutablePage = union(enum) {
             .fork_user => |a_u| std.mem.eql(u8, a_u.fork.name.slice(), b.fork_user.fork.name.slice()) and
                 std.mem.eql(u8, a_u.fork.id.slice(), b.fork_user.fork.id.slice()) and
                 a_u.tab.eql(b.fork_user.tab),
+            .workspace => |a_w| a_w.view == b.workspace.view and std.mem.eql(u8, a_w.selected.slice(), b.workspace.selected.slice()),
             else => true,
         };
+    }
+
+    // every workspace page is its own page
+    pub fn workspacePageChanged(a: RoutablePage, b: RoutablePage) bool {
+        return a.parent() == .workspace and b.parent() == .workspace and !a.eql(b);
     }
 
     // true when following a link from `b` to `a` (both repo routes) should reload
@@ -2305,6 +2369,18 @@ pub const RepoHandle = struct {
         const viewer = self.viewer orelse return false;
         return viewer.role == .owner;
     }
+};
+
+// what a workspace-mode session asks of the workspace it views. the host side
+// (workspace.zig) fills it in, so the wasm build never links it.
+pub const WorkspaceHost = struct {
+    ctx: *anyopaque,
+    // the workspace page `route` names
+    page: *const fn (ctx: *anyopaque, arena: *std.heap.ArenaAllocator, session: *Session, route: RoutablePage.WorkspaceRoute) anyerror!Workspace,
+    // the on-disk repo a "<workspace>:<repo>" identity names, or null
+    source: *const fn (ctx: *anyopaque, identity: []const u8) ?RepoSource,
+    // merge a stack and record its pins; returns what to tell the user
+    merge: *const fn (ctx: *anyopaque, arena: *std.heap.ArenaAllocator, id: []const u8) anyerror![]const u8,
 };
 
 // where a repo page reads its on-disk repo from
@@ -2504,6 +2580,9 @@ pub const Session = struct {
     // (haxy invoked with no arguments inside a repo). null on the server paths,
     // which resolve repos from the admin db instead.
     local: ?RepoSource = null,
+    // the pull workspace a workspace-mode session views, which builds the
+    // workspace pages and resolves each repo route's repo. null elsewhere.
+    workspace_host: ?*const WorkspaceHost = null,
     // focus id -> the live TextInput, refreshed each frame by the views that own
     // inputs. web/wasm form handling looks widgets up here by focus id.
     text_inputs: std.AutoHashMapUnmanaged(usize, *wgt.TextInput) = .empty,
@@ -2537,6 +2616,8 @@ pub const Session = struct {
     pub const HostRequest = union(enum) {
         show_copyable_text: []const u8,
         sync_events,
+        // merge the stack with this id (workspace mode)
+        workspace_merge: []const u8,
         undo: RoutablePage.RepoUndoRoute,
     };
 
@@ -2765,6 +2846,11 @@ pub const Session = struct {
         // the wasm side also parses elided link urls and hides the multi-user
         // chrome.
         host_kind: evt.HostKind = .server,
+        // the workspace's name in workspace mode (a local session over a pull
+        // workspace), whose urls carry each repo's identity
+        workspace: ?[]const u8 = null,
+        // what the last workspace action reported
+        workspace_flash: ?[]const u8 = null,
     };
 
     pub fn init(
@@ -3006,6 +3092,11 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, session: *Session, repo_may
                     _ = try terminal.render(&nav.root);
                     try Repo.Events.performSync(allocator, session);
                 },
+                .workspace_merge => |id| if (session.workspace_host) |host| {
+                    const message = host.merge(host.ctx, session.arena, id) catch |err| @errorName(err);
+                    session.data.workspace_flash = message;
+                    session.refresh_requested = true;
+                },
             }
         }
 
@@ -3228,7 +3319,7 @@ pub fn crossPageLink(root_focus: *Focus, focus_id: usize, data: Session.Data) ?R
     // a link to a different parent page always navigates; within a page, a
     // files-directory / commits-page / list-window change navigates while tab
     // links stay in-page.
-    if (route.parent() != current.parent() or RoutablePage.repoPageChanged(route, current) or RoutablePage.forkPageChanged(route, current) or RoutablePage.homePageChanged(route, current) or RoutablePage.userPageChanged(route, current)) return route;
+    if (route.parent() != current.parent() or RoutablePage.repoPageChanged(route, current) or RoutablePage.forkPageChanged(route, current) or RoutablePage.homePageChanged(route, current) or RoutablePage.userPageChanged(route, current) or RoutablePage.workspacePageChanged(route, current)) return route;
     return null;
 }
 
@@ -3237,7 +3328,7 @@ pub fn cellPageLink(grid: Grid, x: usize, y: usize, data: Session.Data) ?Routabl
     const cell = grid.cell(x, y) catch return null;
     const link = grid.cellLink(cell.*) orelse return null;
     if (link.len == 0 or link[0] != '/') return null;
-    return if (data.host_kind == .local) RoutablePage.fromUrlLocal(link) else RoutablePage.fromUrl(link);
+    return RoutablePage.fromUrlFor(data, link);
 }
 
 // whether the `a:` focus target links to the page already shown, which a click
@@ -3261,7 +3352,7 @@ fn pageLink(root_focus: *Focus, focus_id: usize, data: Session.Data, prefix: []c
     if (!std.mem.startsWith(u8, custom, prefix)) return null;
     const path = custom[prefix.len..];
     // local sessions build (and parse) links with the repo identity elided
-    return if (data.host_kind == .local) RoutablePage.fromUrlLocal(path) else RoutablePage.fromUrl(path);
+    return RoutablePage.fromUrlFor(data, path);
 }
 
 // an assignee as the detail view shows it: the stored email, and the name of
@@ -3380,7 +3471,7 @@ pub const Nav = struct {
 
     // rebuild the current page in place from a current moment
     fn rebuild(self: *Nav, allocator: std.mem.Allocator, session: *Session) !void {
-        if (session.haxy_moment == null and session.local == null) return;
+        if (session.haxy_moment == null and session.local == null and session.workspace_host == null) return;
         const arena = try allocator.create(std.heap.ArenaAllocator);
         arena.* = std.heap.ArenaAllocator.init(allocator);
         errdefer freeArena(allocator, arena);
@@ -3510,6 +3601,7 @@ pub fn initRoot(allocator: std.mem.Allocator, page: *const Page, session: *Sessi
         .user => |*p| .{ .user = try .init(allocator, p, session) },
         .repo => |*p| .{ .repo = try .init(allocator, p, session) },
         .fork => |*p| .{ .fork = try .init(allocator, p, session) },
+        .workspace => |*p| .{ .workspace = try .init(allocator, p, session) },
         .not_found => .{ .not_found = try .init(allocator, session) },
     };
 

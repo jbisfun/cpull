@@ -277,6 +277,7 @@ fn readMeta(
                 .assign => evt.Assignment,
                 .patchrev => evt.PatchRev,
                 .patch => evt.Patch,
+                .stack => evt.Stack,
             };
             break :blk (try evt.readRecordSubset(T, EventMeta, evt.EventDB(hash_kind), hash_kind, haxy_moment, arena, id)) orelse return error.NotFound;
         },
@@ -367,6 +368,10 @@ fn readItem(
         },
         .patchrev => {
             const record = (try evt.readRecordSubset(evt.PatchRev, Authored, DB, hash_kind, haxy_moment, arena, id)) orelse return null;
+            item.author = try ui.Author.initFromEmail(admin_moment, arena, record.author_email);
+        },
+        .stack => {
+            const record = (try evt.readRecordSubset(evt.Stack, Authored, DB, hash_kind, haxy_moment, arena, id)) orelse return null;
             item.author = try ui.Author.initFromEmail(admin_moment, arena, record.author_email);
         },
     }
@@ -747,7 +752,8 @@ pub const Header = struct {
 
             var button_id: ?usize = null;
             if (data.header.sync_status != null) {
-                box.getFocus().kind = .{ .custom = "form:/sync" };
+                // local urls elide the identity, workspace urls carry it
+                box.getFocus().kind = .{ .custom = if (data.identity.len == 0) "form:/sync" else try session.page_arena.allocator().print("form:/{s}/sync", .{data.identity}) };
                 var button = try wgt.TextBox.init(allocator, "sync", .{ .border = .single, .round_corners = true, .wrap_kind = .none });
                 errdefer button.deinit(allocator);
                 button.getFocus().mode = .all;

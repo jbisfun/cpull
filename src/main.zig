@@ -4,6 +4,8 @@ const rp = xit.repo;
 const cmd = @import("./command.zig");
 const srv = @import("./serve.zig");
 const ui = @import("./ui.zig");
+const web = @import("./web.zig");
+const ws = @import("./workspace.zig");
 
 // cook the terminal before a panic/segfault trace is printed, so the trace
 // isn't mangled by raw mode and the alternate buffer
@@ -90,7 +92,7 @@ pub fn run(
             },
         },
         .help => |cmd_kind_maybe| try cmd.printHelp(cmd_kind_maybe, run_opts.out),
-        .local => {
+        .local => |workspace_arg| {
             // session-lifetime allocations (the repo path, session state)
             var session_arena = std.heap.ArenaAllocator.init(allocator);
             defer session_arena.deinit();
@@ -98,7 +100,7 @@ pub fn run(
             // probe both backends for a repo; the nearest one wins, so a repo
             // isn't shadowed by one it is nested inside. only the work path
             // and backend kind are kept; pages re-open the repo on each build.
-            const local: ui.RepoSource = blk: {
+            const found: ?ui.RepoSource = blk: {
                 var found: ?ui.RepoSource = null;
                 inline for ([_]rp.RepoKind{ .git, .xit }) |probe_kind| {
                     if (rp.AnyRepo(probe_kind, .{}).open(io, allocator, .{ .path = cwd_path })) |repo| {
@@ -120,23 +122,41 @@ pub fn run(
                         else => |e| return e,
                     }
                 }
-                break :blk found orelse {
-                    try run_opts.err.print("no git or xit repo found in the current directory\n", .{});
+                break :blk found;
+            };
+
+            // a pull workspace around the current dir, unless one of its
+            // repos is nearer, or the one --workspace names
+            const workspace_root: ?[]const u8 = if (workspace_arg) |arg|
+                try std.Io.Dir.path.resolve(session_arena.allocator(), &.{ cwd_path, arg })
+            else
+                try ws.detect(io, session_arena.allocator(), cwd_path, if (found) |f| f.path else null);
+
+            var workspace: ?*ws.Workspace = null;
+            if (workspace_root) |root| {
+                workspace = ws.Workspace.load(io, allocator, session_arena.allocator(), root, run_opts.global_config_path) catch |err| {
+                    try run_opts.err.print("can't read the pull workspace at {s}: {s}\n", .{ root, @errorName(err) });
                     return error.HandledError;
                 };
-            };
+            }
+            if (workspace == null and found == null) {
+                try run_opts.err.print("no git or xit repo found in the current directory\n", .{});
+                return error.HandledError;
+            }
 
             var session = ui.Session{
                 .arena = &session_arena,
                 .page_arena = &session_arena,
                 .io = io,
-                .local = local,
+                .local = if (workspace == null) found else null,
+                .workspace_host = if (workspace) |w| &w.host else null,
                 .is_terminal = true,
                 .color = run_opts.color,
                 .data = .{
                     // the files root; local routes carry no identity
-                    .current_page = .{ .repo_files = .{ .name = .{} } },
+                    .current_page = if (workspace != null) .{ .workspace = .{} } else .{ .repo_files = .{ .name = .{} } },
                     .host_kind = .local,
+                    .workspace = if (workspace) |w| w.name else null,
                 },
             };
 
@@ -153,11 +173,13 @@ pub fn run(
                 }
             };
 
+            const local: web.LocalHost = if (workspace) |w| .{ .workspace = &w.host, .workspace_name = w.name } else .{ .source = found };
             try srv.runLocal(io, allocator, local, run_opts.err, Runnable{ .io = io, .allocator = allocator, .session = &session });
         },
         .cli => |cli_cmd| switch (cli_cmd) {
             .serve => |options| try srv.run(repo_kind, any_repo_opts, io, allocator, cwd_path, options, run_opts.err, {}),
             .delete_user => |options| try srv.deleteUser(io, allocator, cwd_path, options, run_opts.out, run_opts.err),
+            .stack => |options| try ws.runStackCommand(io, allocator, cwd_path, options, run_opts.global_config_path, run_opts.out, run_opts.err),
         },
     }
 }

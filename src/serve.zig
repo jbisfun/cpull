@@ -231,7 +231,7 @@ pub fn run(
 pub fn runLocal(
     io: std.Io,
     allocator: std.mem.Allocator,
-    local: ui.RepoSource,
+    local: web.LocalHost,
     err: *std.Io.Writer,
     runnable: anytype,
 ) !void {

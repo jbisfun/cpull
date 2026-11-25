@@ -4,6 +4,7 @@ const srv = @import("./serve.zig");
 pub const CommandKind = enum {
     serve,
     delete_user,
+    stack,
 };
 
 const Help = struct {
@@ -25,6 +26,22 @@ fn commandHelp(command_kind: CommandKind) Help {
             \\--web-url and --ssh-url set the public urls shown to users, like https://example.com and ssh://example.com.
             \\--max-repo-size caps each repo's on-disk size, like 1G, rejecting pushes past it. no limit by default.
             \\--temp-dir is where scratch files go instead of each repo's dir. useful when --data-dir is on a network volume.
+            ,
+        },
+        .stack => .{
+            .name = "stack",
+            .descrip =
+            \\changes that span the repos of a pull workspace, landed together.
+            \\new opens one patch per member (REPO:SOURCE[:TARGET], the target
+            \\defaulting to the pullfile branch) and the stack naming them, in the
+            \\workspace's events repo. merge merges every member or none, marks
+            \\them merged and prints the commits to pin. show and list print json.
+            ,
+            .example =
+            \\haxy stack new --title "rename the api" core:feature app/web:feature
+            \\haxy stack merge 5f1c
+            \\haxy stack show 5f1c
+            \\--workspace DIR names the workspace; by default, the one around the current dir.
             ,
         },
         .delete_user => .{
@@ -104,6 +121,10 @@ pub const CommandArgs = struct {
         .{"--max-repo-size"},
         .{"--data-dir"},
         .{"--temp-dir"},
+        .{"--workspace"},
+        .{"--title"},
+        .{"--description"},
+        .{"--labels"},
     });
 
     pub fn init(allocator: std.mem.Allocator, args: []const []const u8) !CommandArgs {
@@ -193,9 +214,20 @@ pub const CommandArgs = struct {
 
 /// parses the args into a format that can be directly used by a repo.
 /// if any additional allocation needs to be done, the arena inside the cmd args will be used.
+pub const StackOptions = struct {
+    action: enum { new, merge, show, list },
+    // the members (new) or the stack id (merge, show)
+    args: []const []const u8 = &.{},
+    workspace_path: ?[]const u8 = null,
+    title: []const u8 = "",
+    description: []const u8 = "",
+    labels: []const u8 = "",
+};
+
 pub const Command = union(CommandKind) {
     serve: srv.Options,
     delete_user: srv.DeleteUserOptions,
+    stack: StackOptions,
 
     pub fn initMaybe(cmd_args: *CommandArgs) !?Command {
         const command_kind = cmd_args.command_kind orelse return null;
@@ -208,6 +240,22 @@ pub const Command = union(CommandKind) {
                 var options: srv.DeleteUserOptions = .{ .name = cmd_args.positional_args[0] };
                 if (cmd_args.get("--data-dir")) |value_maybe| options.data_path = value_maybe orelse return error.DataDirNeedsValue;
                 return .{ .delete_user = options };
+            },
+            .stack => {
+                const positional = cmd_args.positional_args;
+                if (positional.len == 0) return null;
+                const action = std.meta.stringToEnum(@FieldType(StackOptions, "action"), positional[0]) orelse return null;
+                var options: StackOptions = .{ .action = action, .args = positional[1..] };
+                switch (action) {
+                    .new => if (options.args.len == 0) return null,
+                    .merge, .show => if (options.args.len != 1) return null,
+                    .list => if (options.args.len != 0) return null,
+                }
+                if (cmd_args.get("--workspace")) |value_maybe| options.workspace_path = value_maybe orelse return error.WorkspaceNeedsValue;
+                if (cmd_args.get("--title")) |value_maybe| options.title = value_maybe orelse return error.TitleNeedsValue;
+                if (cmd_args.get("--description")) |value_maybe| options.description = value_maybe orelse return error.DescriptionNeedsValue;
+                if (cmd_args.get("--labels")) |value_maybe| options.labels = value_maybe orelse return error.LabelsNeedsValue;
+                return .{ .stack = options };
             },
         }
     }
@@ -264,7 +312,8 @@ pub const CommandDispatch = union(enum) {
         },
     },
     help: ?CommandKind,
-    local,
+    // local mode, over a pull workspace when one is named
+    local: ?[]const u8,
     cli: Command,
 
     pub fn init(cmd_args: *CommandArgs) !CommandDispatch {
@@ -303,7 +352,8 @@ pub const CommandDispatch = union(enum) {
         } else if (show_help) {
             return .{ .help = null };
         } else {
-            return .local;
+            const workspace = if (cmd_args.get("--workspace")) |value_maybe| value_maybe orelse return error.WorkspaceNeedsValue else null;
+            return .{ .local = workspace };
         }
     }
 };

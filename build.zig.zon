@@ -6,6 +6,11 @@
             .url = "git+https://github.com/xit-vcs/xit#80eb4a916df4c43f395b3a2895c5427f9aff89d3",
             .hash = "xit-0.0.0-Ub3nDKXoHQAYSj3iaHk76uRusKWtrwnV9XmqY8L6rSyU",
         },
+        // reads pull workspaces' pullfile.plist, as pull itself does
+        .xml = .{
+            .url = "git+https://github.com/nat3Github/zig-lib-xml#82233206c4f83ed190c1fd7fc976f3e2b26be4b7",
+            .hash = "xml-0.2.2-ZTbP34_NAgAvbDNF1BjVuSDNDdN8bGGrzSjsH4l20H-h",
+        },
     },
     .paths = .{
         "build.zig",

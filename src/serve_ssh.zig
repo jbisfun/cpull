@@ -358,7 +358,7 @@ fn runTui(handler: *const SessionHandler, sess: *ssh.SessionCtx, pty: ssh.PtySiz
                     try session_writer.interface.flush();
                     continue;
                 },
-                .sync_events => {},
+                .sync_events, .workspace_merge => {},
                 .undo => |target| ui.Repo.Undo.handleRequest(allocator, &ui_session, target),
             }
         }

@@ -2,6 +2,7 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     const xit_dep = b.dependency("xit", .{});
+    const xml_mod = b.dependency("xml", .{}).module("xml");
     const ansi_art = ansiArtModule(b);
     const test_filters = b.option([]const []const u8, "test-filter", "Skip tests that do not match any filter") orelse &[0][]const u8{};
 
@@ -66,6 +67,7 @@ pub fn build(b: *std.Build) void {
             .use_llvm = true,
         });
         exe.root_module.addImport("xit", xit_dep.module("xit"));
+        exe.root_module.addImport("xml", xml_mod);
         exe.root_module.addImport("ansi_art", ansi_art);
         exe.root_module.addAnonymousImport("haxy.wasm", .{
             .root_source_file = wasm_exe.getEmittedBin(),
@@ -86,6 +88,7 @@ pub fn build(b: *std.Build) void {
             .filters = test_filters,
         });
         unit_tests.root_module.addImport("xit", xit_dep.module("xit"));
+        unit_tests.root_module.addImport("xml", xml_mod);
         unit_tests.root_module.addImport("ansi_art", ansi_art);
 
         const run_unit_tests = b.addRunArtifact(unit_tests);
@@ -100,6 +103,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/lib.zig"),
     });
     haxy.addImport("xit", xit_dep.module("xit"));
+    haxy.addImport("xml", xml_mod);
     haxy.addImport("ansi_art", ansi_art);
     haxy.addAnonymousImport("haxy.wasm", .{
         .root_source_file = wasm_exe.getEmittedBin(),
@@ -138,6 +142,7 @@ pub fn build(b: *std.Build) void {
             .use_llvm = true,
         });
         server_exe.root_module.addImport("xit", xit_dep.module("xit"));
+        server_exe.root_module.addImport("xml", xml_mod);
         server_exe.root_module.addImport("ansi_art", ansi_art);
         server_exe.root_module.addAnonymousImport("haxy.wasm", .{
             .root_source_file = wasm_exe.getEmittedBin(),

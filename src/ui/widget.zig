@@ -31,6 +31,7 @@ pub const Widget = union(enum) {
     user: ui.User.View,
     repo: ui.Repo.View,
     fork: ui.Fork.View,
+    workspace: ui.Workspace.View,
     quit: ui.Quit.View,
     unauthorized: ui.Unauthorized.View,
     not_found: ui.NotFound.View,
@@ -121,7 +122,7 @@ pub const Widget = union(enum) {
     // whether moving up should return to the page header
     pub fn atTop(self: *Widget, root_focus: *Focus) bool {
         return switch (self.*) {
-            inline .home_about, .home_users, .user_repos, .flow_box_scroll, .new_repo, .new_user, .user_login, .user_notifications, .quit, .repo_files, .repo_commits, .diff_view, .repo_refs, .repo_issues, .repo_patches, .repo_discussions, .repo_events, .repo_undo, .repo_settings, .repo_settings_form, .repo_members, .repo_branches, .user_keys => |*view| view.atTop(),
+            inline .workspace, .home_about, .home_users, .user_repos, .flow_box_scroll, .new_repo, .new_user, .user_login, .user_notifications, .quit, .repo_files, .repo_commits, .diff_view, .repo_refs, .repo_issues, .repo_patches, .repo_discussions, .repo_events, .repo_undo, .repo_settings, .repo_settings_form, .repo_members, .repo_branches, .user_keys => |*view| view.atTop(),
             inline .repo_patch_detail, .user_settings, .delete_form => |*view| view.atTop(root_focus),
             else => false,
         };
@@ -229,7 +230,8 @@ pub fn addBackButton(allocator: std.mem.Allocator, box: *wgt.Box(Widget), sessio
 }
 
 pub fn addHomeButton(allocator: std.mem.Allocator, box: *wgt.Box(Widget), session: *ui.Session) !usize {
-    if (session.data.host_kind != .server) return 0;
+    // a workspace's home lists its repos
+    if (session.data.host_kind != .server and session.data.workspace == null) return 0;
     var home = try wgt.TextBox.init(allocator, "⌂", .{ .border = .hidden, .wrap_kind = .none });
     errdefer home.deinit(allocator);
     home.getFocus().kind = .{ .custom = "a:/" };
