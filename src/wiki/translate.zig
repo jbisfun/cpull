@@ -7,8 +7,8 @@
 //! blob id of the English it was translated from) and `strings.json`
 //! (English -> translation), byte-compatible with the Rust wiki's cache. A
 //! page is sent again only when its English blob id changed; until the new
-//! translation lands, the old one is shown. `WIKI_TRANSLATE=0` (or an
-//! unreachable endpoint) builds from the cache alone.
+//! translation lands, the old one is shown. Translating is opt-in with `WIKI_TRANSLATE=1`; otherwise (or with an
+//! unreachable endpoint) builds use the cache alone.
 const std = @import("std");
 const config = @import("config.zig");
 const sys_mod = @import("sys.zig");
@@ -143,8 +143,10 @@ pub const Job = union(enum) {
 /// finished. Requests go one at a time.
 pub fn run(sys: Sys, cfg: config.Translator, language: []const u8, cache: *Cache, jobs: []const Job) !void {
     if (jobs.len == 0) return;
-    if (std.mem.eql(u8, sys.getenv("WIKI_TRANSLATE") orelse "", "0")) {
-        warn("{d} untranslated pages/strings for {s} (WIKI_TRANSLATE=0)", .{ jobs.len, cache.dir });
+    // opt-in: a translation run starts the local model, so builds (and the
+    // live server) use the cache unless WIKI_TRANSLATE=1
+    if (!std.mem.eql(u8, sys.getenv("WIKI_TRANSLATE") orelse "", "1")) {
+        warn("{d} untranslated pages/strings for {s} (set WIKI_TRANSLATE=1 to translate)", .{ jobs.len, cache.dir });
         return;
     }
     var t: Translator = try .init(sys, cfg, language);
