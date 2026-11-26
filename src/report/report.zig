@@ -136,7 +136,8 @@ fn describe(e: anyerror) []const u8 {
         error.FileNotFound => "no such file",
         error.OutsideRepo => "the file is outside the repo",
         error.NoSuchLine => "the file has no such line",
-        error.InvalidLine => "lines start at 1",
+        error.InvalidLineNumber => "lines start at 1",
+        error.InvalidLine => "a git config file has a line cpull can't read (an empty value?)",
         error.ReportNotFound => "no report has that id",
         error.AmbiguousId => "that id prefix matches more than one report",
         error.NoPullIdentity => "the repo has no user.name/user.email; run it through pull (`pull cpull report ...`)",
@@ -147,7 +148,7 @@ fn describe(e: anyerror) []const u8 {
 fn dispatch(ws: *Workspace, arena: *std.heap.ArenaAllocator, options: Options, out: *std.Io.Writer, err: *std.Io.Writer) !void {
     switch (options.action) {
         .add => {
-            const line = std.fmt.parseInt(u64, options.args[2], 10) catch return error.InvalidLine;
+            const line = std.fmt.parseInt(u64, options.args[2], 10) catch return error.InvalidLineNumber;
             const report = try add(ws, arena, .{
                 .repo = options.args[0],
                 .file = options.args[1],
@@ -233,7 +234,7 @@ pub fn resolveRepo(ws: *const Workspace, name: []const u8) !ws_mod.Repo {
 pub fn add(ws: *Workspace, arena: *std.heap.ArenaAllocator, new: New) !Report {
     const aa = arena.allocator();
     const repo = try resolveRepo(ws, new.repo);
-    if (new.line == 0) return error.InvalidLine;
+    if (new.line == 0) return error.InvalidLineNumber;
     const file = try normalizePath(aa, new.file);
     const line_text = try readWorkLine(ws.io, aa, repo.path, file, new.line);
 
