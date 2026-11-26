@@ -4,7 +4,7 @@
 // where it takes a repo) and the thread view for the patch.
 const std = @import("std");
 const ui = @import("../../../ui.zig");
-const theme = @import("../../theme/theme.zig");
+const theme = @import("theme");
 const fe = @import("../frontend.zig");
 const ctx = @import("../ctx.zig");
 const repo_views = @import("repo.zig");

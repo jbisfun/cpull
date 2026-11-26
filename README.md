@@ -40,6 +40,8 @@ Additionally, cpull provides a web UI for a more typical experience in a web bro
 
 To build, install zig 0.17.0 and do `zig build` and you'll find the binary at `zig-out/bin/cpull`.
 
+The web UI's theme, identicons and code highlighter come from [jbisfun/theme](https://github.com/jbisfun/theme), a path dependency on `../theme` (build.zig.zon). In a [pull](https://github.com/jbisfun/pull) workspace it is the sibling checkout. Anywhere else, clone it next to cpull first.
+
 On a production server you would run this binary with the `serve` subcommand. [Read more](docs/host.md) about self-hosting.
 
 To run it in local mode, just run it with no subcommand in any git repo. It will show a completely offline cpull UI just for that repo. [Read more](docs/local.md) about local mode.

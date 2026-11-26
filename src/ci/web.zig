@@ -6,7 +6,7 @@ const db = @import("db.zig");
 const fmt = @import("fmt.zig");
 const projects = @import("projects.zig");
 const app_mod = @import("app.zig");
-const theme = @import("../frontend/theme/theme.zig");
+const theme = @import("theme");
 const frontend = @import("../frontend/cpull/frontend.zig");
 // patch/stack CI routes (src/integrate)
 const integrate_web = @import("../integrate/ciweb.zig");
@@ -590,6 +590,7 @@ fn render(r: *Req, template: []const u8, title: []const u8, crumbs: []const them
     const layout: theme.Layout = .{
         .title = try std.fmt.allocPrint(r.a, "{s} · {s}", .{ title, frontend.site_name }),
         .site = frontend.site_name,
+        .tools = try frontend.workspaceTools(r.a, .idlci),
         .nav = try frontend.workspaceNav(r.a, "ci"),
         .badges = badges.items,
         .search = .{ .action = "/ci/search", .placeholder = "project or #build" },

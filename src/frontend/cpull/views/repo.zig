@@ -3,7 +3,7 @@
 const std = @import("std");
 const ui = @import("../../../ui.zig");
 const evt = @import("../../../event.zig");
-const theme = @import("../../theme/theme.zig");
+const theme = @import("theme");
 const fe = @import("../frontend.zig");
 const ctx = @import("../ctx.zig");
 const markdown = @import("../markdown.zig");
@@ -265,10 +265,10 @@ fn refPicker(c: Ctx, data: *const Repo, kind_label: []const u8, name: []const u8
 }
 
 // syntax highlighting for the files view: the wiki's tree-sitter highlighter
-// (src/wiki/highlight.zig) over the shown lines, split back into one html
+// (the theme package's highlight module, ../theme/src/highlight) over the shown lines, split back into one html
 // fragment per line. only the languages it has a grammar for, and not for
 // huge windows.
-const highlight = @import("../../../wiki/highlight.zig");
+const highlight = @import("highlight");
 const highlight_max_bytes = 1 << 20;
 
 fn highlightLanguage(name: []const u8) ?[]const u8 {

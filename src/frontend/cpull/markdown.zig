@@ -2,7 +2,7 @@
 // markdown.zig). text is always escaped, so raw html shows as written.
 const std = @import("std");
 const md = @import("../../markdown.zig");
-const theme = @import("../theme/theme.zig");
+const theme = @import("theme");
 
 const W = *std.Io.Writer;
 

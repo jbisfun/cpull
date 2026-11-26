@@ -1,4 +1,4 @@
-/* CI pages (src/ci): the idlci rules the shared theme (frontend/theme/assets/style.css) lacks. */
+/* CI pages (src/ci): the idlci rules the shared theme (../theme/src/theme/assets/style.css) lacks. */
 .wiki-sidebar .progress { height: 6px; margin: 0.15rem 0 0.35rem; }
 .weather { font-size: 1.2rem; }
 .w-sun { color: #f2a600; } .w-cloud-sun { color: #c9a227; } .w-cloud { color: #888a85; }

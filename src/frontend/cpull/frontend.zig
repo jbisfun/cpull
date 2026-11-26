@@ -9,13 +9,14 @@
 const std = @import("std");
 const ui = @import("../../ui.zig");
 const web = @import("../../web.zig");
-const theme = @import("../theme/theme.zig");
+const theme = @import("theme");
 const Ctx = @import("ctx.zig").Ctx;
 const workspace_views = @import("views/workspace.zig");
 const repo_views = @import("views/repo.zig");
 const site_views = @import("views/site.zig");
 const fork_views = @import("views/fork.zig");
-const highlight = @import("../../wiki/highlight.zig");
+const highlight = @import("highlight");
+const integrate = @import("../../integrate/integrate.zig");
 
 pub const site_name = "cpull";
 
@@ -94,20 +95,34 @@ pub fn emit(c: Ctx, w: *std.Io.Writer, chrome: Chrome, template: []const u8, dat
     try theme.render(&templates, c.gpa, c.aa(), template, .{ .layout = layout, .page = data }, w);
 }
 
-// the workspace server's global bar, shared with the features mounted beside
-// haxy's pages (src/ci); `active` names the current item
+// the workspace server's own items in the global bar, shared with the
+// features mounted beside haxy's pages (src/ci); `active` names the current item
 pub fn workspaceNav(aa: std.mem.Allocator, active: []const u8) ![]const theme.Link {
     const items = [_]struct { label: []const u8, href: []const u8, key: []const u8 }{
         .{ .label = "Repositories", .href = "/", .key = "home" },
         .{ .label = "Issues", .href = "/home/issues", .key = "issues" },
         .{ .label = "Patches", .href = "/home/patches", .key = "patches" },
         .{ .label = "Stacks", .href = "/home/stacks", .key = "stacks" },
-        .{ .label = "CI", .href = "/ci", .key = "ci" },
-        .{ .label = "Wiki", .href = "/wiki/", .key = "wiki" },
     };
     const out = try aa.alloc(theme.Link, items.len);
     for (items, out) |item, *link| link.* = .{ .label = item.label, .href = item.href, .active = std.mem.eql(u8, item.key, active) };
     return out;
+}
+
+// the workspace tool switcher (theme.toolNav) on the workspace server's
+// pages, `active` being the tool rendering them. The CI and the wiki are
+// still mounted in this server (/ci, /wiki/), so they link there; the other
+// tools are found by their serve.addr when the server knows its workspace.
+pub fn workspaceTools(aa: std.mem.Allocator, active: theme.Tool) ![]const theme.ToolLink {
+    const mounted = [_]theme.Mount{
+        .{ .tool = .cpull, .base = "/" },
+        .{ .tool = .idlci, .base = "/ci" },
+        .{ .tool = .wiki, .base = "/wiki/" },
+    };
+    if (integrate.workspace) |ws| if (theme.workspaceTools(ws.io, aa, ws.root, active, &mounted)) |tools| return tools else |_| {};
+    var found: theme.discovery.Found = .initFill(null);
+    for (mounted) |m| found.set(m.tool, m.base);
+    return theme.toolNav(aa, found, active);
 }
 
 fn buildLayout(c: Ctx, chrome: Chrome) !theme.Layout {
@@ -118,7 +133,9 @@ fn buildLayout(c: Ctx, chrome: Chrome) !theme.Layout {
     var footer: std.ArrayList(theme.Link) = .empty;
     var flashes: std.ArrayList(theme.Flash) = .empty;
 
+    var tools: []const theme.ToolLink = &.{};
     if (c.workspace()) |name| {
+        tools = try workspaceTools(aa, .cpull);
         try nav.appendSlice(aa, try workspaceNav(aa, chrome.nav));
         try badges.append(aa, .{ .label = name, .icon = "boxes", .title = "pull workspace" });
         try crumbs.append(aa, .{ .label = name, .href = "/" });
@@ -147,6 +164,7 @@ fn buildLayout(c: Ctx, chrome: Chrome) !theme.Layout {
     return .{
         .title = try c.print("{s} · {s}", .{ chrome.title, site_name }),
         .site = site_name,
+        .tools = tools,
         .nav = nav.items,
         .badges = badges.items,
         .crumbs = crumbs.items,

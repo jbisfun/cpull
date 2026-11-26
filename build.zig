@@ -107,18 +107,6 @@ pub fn build(b: *std.Build) void {
         const test_step = b.step("test", "Run unit tests");
         test_step.dependOn(&run_unit_tests.step);
 
-        // the themed-page layer stands alone (std + vin)
-        const theme_tests = b.addTest(.{
-            .root_module = b.createModule(.{
-                .root_source_file = b.path("src/frontend/theme/theme.zig"),
-                .target = target,
-                .optimize = optimize,
-            }),
-            .filters = test_filters,
-        });
-        theme_tests.root_module.addImport("vin", vin_mod);
-        test_step.dependOn(&b.addRunArtifact(theme_tests).step);
-
         // the CI (src/ci), with the cpull frontend it renders beside
         const ci_tests = b.addTest(.{
             .root_module = b.createModule(.{
@@ -133,6 +121,7 @@ pub fn build(b: *std.Build) void {
         ci_tests.root_module.addImport("ansi_art", ansi_art);
         ci_tests.root_module.addImport("vin", vin_mod);
         ci_tests.root_module.addImport("sqlite", sqlite_mod);
+        addTheme(b, ci_tests.root_module, target, optimize);
         const run_ci_tests = b.addRunArtifact(ci_tests);
         run_ci_tests.has_side_effects = true;
         test_step.dependOn(&run_ci_tests.step);
@@ -241,7 +230,7 @@ fn addFrontend(b: *std.Build, module: *std.Build.Module, vin_mod: *std.Build.Mod
 
 // the imports of the wiki generator (src/wiki, `cpull wiki`): cmark-gfm (C,
 // built here; adapted from abhinav/libcmark-gfm.zig), uucode, superhtml's
-// html tokenizer, zig-toml and zig-vin
+// html tokenizer, zig-toml, zig-vin and the theme package's highlighter
 fn addWiki(b: *std.Build, module: *std.Build.Module, vin_mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
     const cmark = b.dependency("cmark_gfm", .{});
     const config = b.addConfigHeader(.{ .style = .{ .cmake = cmark.path("src/config.h.in") } }, .{
@@ -278,53 +267,9 @@ fn addWiki(b: *std.Build, module: *std.Build.Module, vin_mod: *std.Build.Module,
         .flags = &.{"-std=c99"},
     });
     module.linkLibrary(lib);
-    // tree-sitter and the grammars highlight.zig embeds (parser + scanner,
-    // and queries/highlights.scm as an anonymous import for @embedFile)
-    const ts = b.dependency("tree_sitter", .{ .target = target, .optimize = optimize, .amalgamated = true });
-    module.linkLibrary(ts.artifact("tree-sitter"));
-    // (name, package, source dir, has an external scanner, highlights query);
-    // a library each, for its own headers
-    inline for (.{
-        .{ "bash", "bash", "src", true, "queries/highlights.scm" },
-        .{ "json", "json", "src", false, "queries/highlights.scm" },
-        .{ "rust", "rust", "src", true, "queries/highlights.scm" },
-        .{ "python", "python", "src", true, "queries/highlights.scm" },
-        .{ "javascript", "javascript", "src", true, "queries/highlights.scm" },
-        .{ "yaml", "yaml", "src", true, "queries/highlights.scm" },
-        .{ "toml", "toml", "src", true, "queries/highlights.scm" },
-        .{ "zig", "zig", "src", false, "queries/highlights.scm" },
-        .{ "lua", "lua", "src", true, "queries/highlights.scm" },
-        .{ "diff", "diff", "src", false, "queries/highlights.scm" },
-        .{ "c", "c", "src", false, "queries/highlights.scm" },
-        .{ "objc", "objc", "src", false, "queries/highlights.scm" },
-        .{ "swift", "swift", "src", true, "queries/highlights.scm" },
-        .{ "html", "html", "src", true, "queries/highlights.scm" },
-        .{ "css", "css", "src", true, "queries/highlights.scm" },
-        .{ "typescript", "typescript", "typescript/src", true, "queries/highlights.scm" },
-        .{ "tsx", "typescript", "tsx/src", true, "queries/highlights.scm" },
-        .{ "xml", "xml", "xml/src", true, "queries/xml/highlights.scm" },
-        .{ "markdown", "markdown", "tree-sitter-markdown/src", true, "tree-sitter-markdown/queries/highlights.scm" },
-        .{ "ruby", "ruby", "src", true, "queries/highlights.scm" },
-        .{ "make", "make", "src", false, "queries/highlights.scm" },
-        .{ "ini", "ini", "src", false, "queries/highlights.scm" },
-    }) |grammar| {
-        const name = grammar[0];
-        const dep = b.dependency("ts_" ++ grammar[1], .{});
-        const glib = b.addLibrary(.{
-            .linkage = .static,
-            .name = "tree-sitter-" ++ name,
-            .root_module = b.createModule(.{ .target = target, .optimize = optimize, .link_libc = true, .sanitize_c = .off }),
-        });
-        glib.root_module.addIncludePath(dep.path(grammar[2]));
-        glib.root_module.addCSourceFiles(.{
-            .root = dep.path(grammar[2]),
-            .files = if (grammar[3]) &.{ "parser.c", "scanner.c" } else &.{"parser.c"},
-            .flags = &.{"-std=c11"},
-        });
-        module.linkLibrary(glib);
-        module.addAnonymousImport("ts_" ++ name ++ "_highlights", .{ .root_source_file = dep.path(grammar[4]) });
-    }
-    module.addImport("regex", b.dependency("regex", .{ .target = target, .optimize = optimize }).module("regex"));
+    // the shared theme package (../theme, a workspace sibling): the themed-page
+    // layer, serve.addr discovery and the tree-sitter highlighter
+    addTheme(b, module, target, optimize);
     module.addImport("vin", vin_mod);
     module.addImport("toml", b.dependency("toml", .{ .target = target, .optimize = optimize }).module("toml"));
     module.addImport("superhtml", b.dependency("superhtml", .{ .target = target, .optimize = optimize }).module("superhtml"));
@@ -333,6 +278,16 @@ fn addWiki(b: *std.Build, module: *std.Build.Module, vin_mod: *std.Build.Module,
         .optimize = optimize,
         .fields = @as([]const []const u8, &.{ "general_category", "simple_lowercase_mapping", "script" }),
     }).module("uucode"));
+}
+
+// the jbisfun/theme package's modules (build.zig.zon: `.path = "../theme"`,
+// the pull workspace's sibling checkout): `theme`, `discovery` and
+// `highlight` (the wiki's code blocks and the files view)
+fn addTheme(b: *std.Build, module: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
+    const dep = b.dependency("theme", .{ .target = target, .optimize = optimize, .highlight = true });
+    module.addImport("theme", dep.module("theme"));
+    module.addImport("discovery", dep.module("discovery"));
+    module.addImport("highlight", dep.module("highlight"));
 }
 
 // reads every ANSI-art text file while configuring the build. sorting keeps

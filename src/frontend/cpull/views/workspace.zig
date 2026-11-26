@@ -3,7 +3,7 @@
 // stack with its members and the merge form.
 const std = @import("std");
 const ui = @import("../../../ui.zig");
-const theme = @import("../../theme/theme.zig");
+const theme = @import("theme");
 const fe = @import("../frontend.zig");
 const ctx = @import("../ctx.zig");
 const markdown = @import("../markdown.zig");

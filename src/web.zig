@@ -12,7 +12,7 @@ const fork = @import("./fork.zig");
 const pch = @import("./patch.zig");
 const notify = @import("./notify.zig");
 // cpull: repo identicons (served at /<repo>/icon.svg)
-const identicon = @import("./frontend/theme/identicon.zig");
+const identicon = @import("theme").identicon;
 const xitui = xit.xitui;
 const wgt = xitui.widget;
 const Focus = xitui.focus.Focus;
@@ -2873,7 +2873,7 @@ fn renderPage(
 
 // cpull: a repo's identicon at /<owner>:<name>/icon.svg (/icon.svg for plain
 // local mode's repo), drawn from the cpull repo name like the themed pages'
-// inline copies (src/frontend/theme/identicon.zig). any well-formed repo url
+// inline copies (the theme package's identicon.zig). any well-formed repo url
 // gets one: it is a pure function of the name, so nothing is looked up.
 fn repoIconName(host: Host, path: []const u8) ?[]const u8 {
     const suffix = "/icon.svg";

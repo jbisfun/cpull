@@ -4,7 +4,7 @@
 // answers null (or the text unchanged) when the page isn't served by a
 // workspace server with CI, or on any error, so pages never fail over it.
 const std = @import("std");
-const theme = @import("../frontend/theme/theme.zig");
+const theme = @import("theme");
 const db = @import("../ci/db.zig");
 const integrate = @import("integrate.zig");
 const forge = @import("forge.zig");

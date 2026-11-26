@@ -5,14 +5,14 @@
 //! Rust wiki used): `data-sourcepos` on every block and most inlines (so
 //! Radar can map a selection back to its source line), GitHub-style heading
 //! ids with anchor links, `{#id .class key=value}` heading attributes, and
-//! code blocks highlighted at build time (highlight.zig).
+//! code blocks highlighted at build time (the theme package's `highlight` module).
 //!
 //! Front matter is blanked out before parsing (line count kept), so source
 //! positions count lines of the whole file, as comrak's do.
 const std = @import("std");
 const uucode = @import("uucode");
 const c = @import("cmark.zig");
-const highlight = @import("highlight.zig");
+const highlight = @import("highlight");
 
 const Allocator = std.mem.Allocator;
 const Out = std.ArrayList(u8);

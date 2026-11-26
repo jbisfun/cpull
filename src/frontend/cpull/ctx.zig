@@ -3,7 +3,7 @@
 const std = @import("std");
 const ui = @import("../../ui.zig");
 const evt = @import("../../event.zig");
-const theme = @import("../theme/theme.zig");
+const theme = @import("theme");
 const localtime = @import("localtime.zig");
 
 pub const Ctx = struct {

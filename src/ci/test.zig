@@ -77,7 +77,7 @@ test "pages render and the API answers" {
     try std.testing.expect(contains(dash.body, "Build Queue (1)"));
     try std.testing.expect(contains(dash.body, "w-cloud-lightning-rain"));
     try std.testing.expect(contains(dash.body, "watching"));
-    try std.testing.expect(contains(dash.body, "href=\"/ci\" data-label=\"CI\" aria-current=\"page\""));
+    try std.testing.expect(contains(dash.body, "nav-link active\" href=\"/ci\" data-tool=\"idlci\""));
 
     const project = try fetch(a, &client, port, .GET, "/ci/projects/group/app-ios", null);
     try std.testing.expect(contains(project.body, "Build with Parameters"));

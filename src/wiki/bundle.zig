@@ -11,7 +11,7 @@
 //! precommit hook). `$WIKI_ESBUILD` overrides the binary.
 const std = @import("std");
 const state_mod = @import("state.zig");
-const highlight = @import("highlight.zig");
+const highlight = @import("highlight");
 const Sys = @import("sys.zig").Sys;
 
 pub fn bundle(sys: Sys, wiki: []const u8, dist: []const u8, state: *state_mod.State) !void {
