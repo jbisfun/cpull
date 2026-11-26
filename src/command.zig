@@ -7,6 +7,7 @@ pub const CommandKind = enum {
     stack,
     report,
     wiki,
+    records,
 };
 
 const Help = struct {
@@ -44,6 +45,17 @@ fn commandHelp(command_kind: CommandKind) Help {
             \\cpull stack merge 5f1c
             \\cpull stack show 5f1c
             \\--workspace DIR names the workspace; by default, the one around the current dir.
+            ,
+        },
+        .records => .{
+            .name = "records",
+            .descrip =
+            \\the merged state of the repos' issues, comments and stacks, as json:
+            \\what cpull shows after merging concurrent edits field by field. for
+            \\tools (pull) that read the events without linking cpull.
+            ,
+            .example =
+            \\cpull records ~/ws/core ~/ws
             ,
         },
         .report => .{
@@ -304,6 +316,7 @@ pub const Command = union(CommandKind) {
     stack: StackOptions,
     report: ReportOptions,
     wiki: @import("wiki/wiki.zig").Options,
+    records: @import("records.zig").Options,
 
     pub fn initMaybe(cmd_args: *CommandArgs) !?Command {
         const command_kind = cmd_args.command_kind orelse return null;
@@ -358,6 +371,10 @@ pub const Command = union(CommandKind) {
                 var options: Options = .{ .action = action, .force = cmd_args.contains("--force") };
                 if (cmd_args.get("--workspace")) |value_maybe| options.workspace_path = value_maybe orelse return error.WorkspaceNeedsValue;
                 return .{ .wiki = options };
+            },
+            .records => {
+                if (cmd_args.positional_args.len == 0) return null;
+                return .{ .records = .{ .paths = cmd_args.positional_args } };
             },
         }
     }

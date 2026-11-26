@@ -225,6 +225,7 @@ pub fn run(
             .stack => |options| try ws.runStackCommand(io, allocator, cwd_path, options, run_opts.global_config_path, run_opts.out, run_opts.err),
             .report => |options| try @import("report/report.zig").run(io, allocator, cwd_path, options, run_opts.global_config_path, run_opts.out, run_opts.err),
             .wiki => |options| try @import("wiki/wiki.zig").runCommand(io, allocator, cwd_path, options, run_opts.err),
+            .records => |options| try @import("records.zig").run(io, allocator, cwd_path, options, run_opts.global_config_path, run_opts.out),
         },
     }
 }

@@ -22,6 +22,8 @@ Running it as a server
   pull cpull open --web-listen 127.0.0.1:8080
   ```
 
+  `pull cpull open` also passes `--ci-jobs N`, `--ci-watch` and `--ci-watch-interval S` on, and any other cpull flag after `--`.
+
 * As a pull job, add this to the pullfile's `jobs` array. Jobs run from the workspace root, with the workspace env:
 
   ```xml
