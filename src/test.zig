@@ -8,5 +8,8 @@ comptime {
     _ = @import("test/ui.zig");
     _ = @import("test/undo.zig");
     _ = @import("test/workspace.zig");
+    _ = @import("test/report.zig");
+    _ = @import("report/report.zig");
+    _ = @import("report/anchor.zig");
     _ = @import("pullfile.zig");
 }

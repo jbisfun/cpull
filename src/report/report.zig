@@ -132,7 +132,7 @@ pub fn run(
 fn describe(e: anyerror) []const u8 {
     return switch (e) {
         error.RepoNotFound => "no such repo in the pullfile (use \".\" for the workspace's events repo)",
-        error.NoEventsRepo => "the workspace has no events repo (see `haxy` docs/workspace.md)",
+        error.NoEventsRepo => "the workspace has no events repo (see cpull docs/workspace.md)",
         error.FileNotFound => "no such file",
         error.OutsideRepo => "the file is outside the repo",
         error.NoSuchLine => "the file has no such line",
@@ -659,12 +659,12 @@ fn daysFromCivil(year: i64, month: u8, day: u8) i64 {
 
 test parseTime {
     try std.testing.expectEqual(@as(u64, 0), try parseTime("1970-01-01T00:00:00Z"));
-    try std.testing.expectEqual(@as(u64, 1795058094), try parseTime("2026-11-18T03:14:54.992190370Z"));
-    try std.testing.expectEqual(@as(u64, 1795058094), try parseTime("2026-11-17T22:14:54-05:00"));
+    try std.testing.expectEqual(@as(u64, 1794971694), try parseTime("2026-11-18T03:14:54.992190370Z"));
+    try std.testing.expectEqual(@as(u64, 1794971694), try parseTime("2026-11-17T22:14:54-05:00"));
     try std.testing.expectError(error.InvalidTime, parseTime("yesterday"));
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
-    try std.testing.expectEqualStrings("2026-11-18T03:14:54Z", try formatTime(arena.allocator(), 1795058094));
+    try std.testing.expectEqualStrings("2026-11-18T03:14:54Z", try formatTime(arena.allocator(), 1794971694));
 }
 
 test parseAction {

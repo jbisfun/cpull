@@ -182,7 +182,9 @@ pub fn readFile(
     var line_iter = try df.LineIterator(repo_kind, repo_opts).initFromOid(state, io, gpa, path, &entry.oid, entry.mode);
     defer line_iter.deinit();
     if (line_iter.source == .binary) return error.BinaryFile;
-    const total = line_iter.count();
+    var total = line_iter.count();
+    // a final newline ends the last line rather than starting another
+    if (total > 0 and (try line_iter.get(total - 1)).len == 0) total -= 1;
     const lines = try aa.alloc([]const u8, total);
     for (lines, 0..) |*line, i| line.* = try aa.dupe(u8, try line_iter.get(i));
     return lines;
