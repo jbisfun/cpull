@@ -1,0 +1,16 @@
+{#- haxy-specific pieces on top of theme/macros.html. -#}
+
+{#- Who wrote something: {name, href}. -#}
+{% macro person(p) -%}
+{% if p.href %}<a href="{{ p.href }}">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}
+{%- endmacro %}
+
+{#- Label chips, each filtering its list: [{label, href}]. -#}
+{% macro chips(items) -%}
+{% for l in items %}<a class="badge rounded-pill text-bg-secondary haxy-label" href="{{ l.href }}">{{ l.label }}</a> {% endfor %}
+{%- endmacro %}
+
+{#- A status pill (open/closed/merged/draft). -#}
+{% macro status(label, ball) -%}
+{% if label %}<span class="haxy-status haxy-status-{{ ball }}">{{ label }}</span>{% endif %}
+{%- endmacro %}

@@ -1,0 +1,6 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{% block content %}
+{{ ui.heading(page.title, "", "house") }}
+{% if page.has_text %}{{ page.text }}{% else %}<p class="text-body-secondary">A haxy server.</p>{% endif %}
+{% endblock %}

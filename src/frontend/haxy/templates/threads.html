@@ -1,0 +1,38 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{% import "macros.html" as hx %}
+{% block content %}
+{{ ui.heading(page.title, "", "record-circle" if page.kind == "issue" else ("file-diff" if page.kind == "patch" else "chat-left-text")) }}
+<div class="d-flex align-items-start gap-2">
+  <div class="flex-grow-1">{{ ui.search(page.search_action, page.search, page.placeholder) }}</div>
+  {% if page.new_href %}<a class="btn btn-sm btn-primary" href="{{ page.new_href }}"><i class="bi bi-plus-lg"></i> New {{ page.noun }}</a>{% endif %}
+</div>
+{% if page.clear_href %}<div class="small mb-2">Showing {{ page.plural }} matching “{{ page.search }}”. <a href="{{ page.clear_href }}">Clear the search</a></div>{% endif %}
+{{ ui.tabs(page.tabs) }}
+<div class="table-responsive tool-tabbed">
+{% if page.labels_view %}
+<div class="p-3">{% for l in page.label_chips %}<a class="badge rounded-pill text-bg-secondary haxy-label fs-6 me-1" href="{{ l.href }}">{{ l.label }}</a>{% else %}<span class="text-body-secondary">{{ page.empty }}</span>{% endfor %}</div>
+{% else %}
+<table class="table table-sm table-hover align-middle mb-0">
+  <thead><tr><th class="text-center">S</th><th>{{ page.noun|capitalize }}</th><th>Opened</th><th class="text-center" title="Comments"><i class="bi bi-chat"></i></th><th>Labels</th></tr></thead>
+  <tbody>
+  {% for r in page.rows %}
+    <tr>
+      <td class="text-center">{{ ui.ball(r.ball, "ball-lg", r.status) }}</td>
+      <td><a class="fw-semibold" href="{{ r.href }}">{{ r.title }}</a>
+        {% if r.draft %}<span class="badge text-bg-secondary">draft</span>{% endif %}
+        {% if r.conflict %}<span class="badge text-bg-danger">conflict</span>{% endif %}
+        {% if r.assignees %}<div class="small text-body-secondary"><i class="bi bi-person"></i> {{ r.assignees|join(", ") }}</div>{% endif %}</td>
+      <td class="small text-nowrap">{{ ui.time(r.opened) }} by {{ hx.person(r.author) }}</td>
+      <td class="text-center small">{{ r.comments or "" }}</td>
+      <td>{{ hx.chips(r.labels) }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="text-body-secondary">{{ page.empty }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+</div>
+{{ ui.pager(page.prev, page.next) }}
+{% endblock %}

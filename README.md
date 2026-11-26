@@ -53,6 +53,8 @@ On a production server you would run this binary with the `serve` subcommand. [R
 
 To run it in local mode, just run it with no subcommand in any git repo. It will show a completely offline haxy UI just for that repo. [Read more](docs/local.md) about local mode.
 
+Run it inside a [pull](https://github.com/jbisfun/pull) workspace and it covers every repo in the workspace, plus stacks: changes across repos that land together. `--web-listen 127.0.0.1:8080` serves just that account-less web UI, as a background job. [Read more](docs/workspace.md) about workspace mode.
+
 The easiest way to try Haxy out is like this:
 
 ```

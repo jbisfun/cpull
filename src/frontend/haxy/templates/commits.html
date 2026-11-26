@@ -1,0 +1,30 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{% import "macros.html" as hx %}
+{% block content %}
+{{ ui.heading("History", "", "clock-history") }}
+<p class="tool-meta"><i class="bi bi-git"></i> {{ page.ref_kind }} <code>{{ page.ref_name }}</code>{% if page.path %} · <code>{{ page.path }}</code>{% endif %}{% if page.count is not none %} · {{ page.count }} commits{% endif %} · <a href="{{ page.files_href }}">Browse files</a></p>
+{% if page.search_action %}{{ ui.search(page.search_action, page.search, "Words in commit messages") }}{% endif %}
+{% if page.clear_href %}<div class="small mb-2">Showing commits matching “{{ page.search }}”. <a href="{{ page.clear_href }}">Show the whole history</a></div>{% endif %}
+{% if page.no_commits %}{{ ui.empty("No commits yet.") }}{% else %}
+<div class="table-responsive">
+<table class="table table-sm table-hover align-middle">
+  <thead><tr><th>Commit</th><th>Message</th><th>Author</th><th>When</th><th></th></tr></thead>
+  <tbody>
+  {% for r in page.rows %}
+    <tr>
+      <td><a href="{{ r.href }}"><code>{{ r.oid }}</code></a></td>
+      <td><a class="fw-semibold" href="{{ r.href }}">{{ r.summary }}</a>{% if r.merge %} <span class="badge text-bg-secondary">merge</span>{% endif %}{% if r.stats %}<div class="small text-body-secondary">{{ r.stats }}</div>{% endif %}</td>
+      <td class="text-nowrap">{{ hx.person(r.author) }}</td>
+      <td class="text-nowrap small">{{ ui.time(r.time) }}</td>
+      <td class="text-end text-nowrap small"><a class="me-2" href="{{ r.diff_href }}">Diff</a><a href="{{ r.files_href }}">Files</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="text-body-secondary">No commits{% if page.search %} match this search{% endif %}.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{{ ui.pager("", page.next, "", "Older commits") }}
+{% endif %}
+{% endblock %}

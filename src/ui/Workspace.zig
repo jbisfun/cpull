@@ -138,7 +138,7 @@ pub fn render(arena: std.mem.Allocator, data: Self) ![]const u8 {
     try w.writeAll("\n\n");
     switch (data.view) {
         .home => {
-            if (data.events_identity) |identity| try w.print("Workspace [issues](/{s}/issues) and [discussions](/{s}/discuss) live in [{s}](/{s}).\n\n", .{ identity, identity, identity, identity });
+            if (data.events_identity) |identity| try w.print("Workspace [issues](/{s}/issues) and [discussions](/{s}/discussions) live in [{s}](/{s}).\n\n", .{ identity, identity, identity, identity });
             var group: ?[]const u8 = null;
             for (data.repos) |repo| {
                 if (!optEql(group, repo.group)) {

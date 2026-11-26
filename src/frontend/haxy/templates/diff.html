@@ -1,0 +1,27 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{% block tasks_before %}{% if page.commit_href %}{{ ui.back(page.commit_href, "Back to Commit") }}{% endif %}{% endblock %}
+{% block content %}
+{{ ui.heading(page.heading, "", "file-diff") }}
+<p class="tool-meta">{% if page.compared %}Compared with <a href="{{ page.compared_href }}"><code>{{ page.compared }}</code></a> · {% elif page.commit_href %}A root commit: every file is new · {% endif %}<a href="{{ page.files_href }}">Browse files</a></p>
+{% if page.path %}<div class="small mb-2">Showing changes to <code>{{ page.path }}</code>. <a href="{{ page.all_href }}">Show all files</a></div>{% endif %}
+{% if page.empty %}{{ ui.empty(page.empty) }}{% endif %}
+{% for f in page.files %}
+<div class="card haxy-diff mb-3">
+  <div class="card-header d-flex align-items-center gap-2">
+    <code class="fw-semibold">{{ f.path }}</code>
+    <span class="badge haxy-change-{{ f.status }}">{{ f.status }}</span>
+    <span class="ms-auto small"><a href="{{ f.file_href }}">View file</a>{% if f.only_href %} · <a href="{{ f.only_href }}">Only this file</a>{% endif %}</span>
+  </div>
+  {% if f.note %}<div class="card-body small text-body-secondary">{{ f.note }}</div>{% endif %}
+  {% for hunk in f.hunks %}
+  <div class="haxy-code"><table><tbody>
+  {% for l in hunk %}<tr class="{{ l.class }}"><td class="haxy-num">{{ l.number }}</td><td class="haxy-sign">{{ l.sign }}</td><td class="haxy-line">{{ l.text }}</td></tr>
+  {% endfor %}
+  </tbody></table></div>
+  {% endfor %}
+</div>
+{% endfor %}
+{% if page.truncated %}<div class="alert alert-secondary py-1 small">The rest of the diff is too large to show.</div>{% endif %}
+{{ ui.pager(page.prev, page.next) }}
+{% endblock %}

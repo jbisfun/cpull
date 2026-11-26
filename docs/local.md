@@ -12,6 +12,8 @@ Running it
 
 * The TUI opens in your terminal, showing the repo's files, commits, refs, issues, patches, and discussions. Haxy also serves the same UI on a local port, which is shown in the footer, in case you'd rather use a browser.
 
+* To skip the TUI, run `haxy --web-listen 127.0.0.1:8080`. Haxy then serves only the web UI, on exactly that address, until it's killed. Inside a pull workspace this covers the whole workspace; see [workspace.md](workspace.md).
+
 * If you cloned the repo from a haxy server, its `haxy/events` branch came along with it, so all of the project's metadata is already there. Haxy reads it straight from the remote-tracking branch, so you don't need to check anything out. It all works completely offline.
 
 Editing

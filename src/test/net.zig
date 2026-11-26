@@ -965,8 +965,12 @@ fn testPushEvents(
     var server_process = try runServer(io, allocator, temp_path, port);
     defer _ = server_process.kill(io);
 
+    // a pushed pull workspace names its nested repos "group/app" as
+    // "group.app", so the name holds a "."
+    const repo_name = "group.testrepo";
+
     // register the repo under admin and locate its on-disk directory
-    const server_path = (try repoOnDiskPath(io, allocator, temp_path, "testrepo", true)).?;
+    const server_path = (try repoOnDiskPath(io, allocator, temp_path, repo_name, true)).?;
     defer allocator.free(server_path);
 
     const repo_opts: rp.RepoOpts(.xit) = .{ .hash = hash_kind, .is_test = true };
@@ -982,7 +986,7 @@ fn testPushEvents(
 
     // add remote
     {
-        const remote_url = try remoteUrl(transport_def, allocator, "testrepo", port);
+        const remote_url = try remoteUrl(transport_def, allocator, repo_name, port);
         defer allocator.free(remote_url);
 
         try client_repo.addRemote(io, allocator, .{ .name = "origin", .value = remote_url });
@@ -1087,6 +1091,37 @@ fn testPushEvents(
         // the description and labels were correctly edited
         try std.testing.expectEqualStrings(events_to_push2[0].event.issue.?.description, issue.event.description);
         try std.testing.expectEqualStrings(events_to_push2[0].event.issue.?.labels, issue.event.labels);
+    }
+
+    //
+    // push a workspace stack, as a pull workspace's events repo carries
+    //
+
+    const stack_event_id = evt.EventWithId.randomId(prng.random());
+    const stack_members = "core 0123456789abcdef0123456789abcdef\ngroup/app fedcba9876543210fedcba9876543210";
+    const events_to_push3 = [_]evt.EventWithId{.{
+        .id = std.fmt.bytesToHex(stack_event_id, .lower),
+        .author = .{ .name = "haxy", .email = "user@haxy" },
+        .event = .{ .stack = .{ .title = "rename the api", .description = "", .labels = "api", .members = stack_members } },
+    }};
+    try evt.consume(.local, .repo, repo_kind, .{ .hash = hash_kind, .is_test = true }, io, allocator, &client_repo, evt.events_ref, &events_to_push3);
+    try client_repo.push(
+        io,
+        allocator,
+        "origin",
+        "haxy/events",
+        false,
+        .{ .wire = .{ .ssh = .{
+            .command = ssh_cmd_maybe,
+        } } },
+    );
+
+    // the server consumed it through the same path as the issue
+    {
+        const haxy_moment = try evt.currentMoment(repo_opts, &server_repo);
+        const stack = (try evt.Stack.readById(ServerRepo.DB, repo_opts.hash, haxy_moment, &arena, &stack_event_id)) orelse return error.NotFound;
+        try std.testing.expectEqualStrings(stack_members, stack.event.members);
+        try std.testing.expectEqual(.open, stack.event.status.kind());
     }
 }
 

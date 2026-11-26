@@ -1,0 +1,68 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{% macro body(b) -%}
+{% if b.kind == "markdown" %}{{ b.html }}
+{% elif b.kind == "code" %}
+{% if b.note %}<div class="alert alert-secondary py-1 small">{{ b.note }}{% if b.first_href %} <a href="{{ b.first_href }}">First lines</a>{% endif %}{% if b.next_href %} <a href="{{ b.next_href }}">Next lines</a>{% endif %}</div>{% endif %}
+<div class="haxy-code"><table><tbody>
+{% for l in b.lines %}<tr id="L{{ l.number }}"><td class="haxy-num"><a href="{{ b.open_href }}#L{{ l.number }}">{{ l.number }}</a></td><td class="haxy-line">{{ l.text }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+{% elif b.kind == "binary" %}{{ ui.empty("Binary file not shown.") }}
+{% elif b.kind == "empty" %}{{ ui.empty("This file is empty.") }}
+{% else %}{{ ui.empty("This file isn't loaded.") }} <a href="{{ b.open_href }}">Open the file</a>
+{% endif %}
+{%- endmacro %}
+{% block content %}
+{{ ui.heading(page.name, "", "hdd-stack") }}
+<p class="tool-meta">{% if page.description %}{{ page.description }} · {% endif %}{% if page.no_commits %}no commits yet{% else %}<i class="bi bi-git"></i> {{ page.ref_kind }} <code>{{ page.ref_name }}</code>{% endif %}</p>
+{% if page.no_commits %}
+{{ ui.empty("No commits yet. Push a branch to see its files and history.") }}
+{% for cmd in page.clone %}<pre class="console">{{ cmd.text }}</pre>{% endfor %}
+{% else %}
+<div class="d-flex flex-wrap align-items-center gap-3 mb-2 small">
+  {% if page.default_href %}<a href="{{ page.default_href }}"><i class="bi bi-arrow-counterclockwise"></i> Default branch</a>{% endif %}
+  {% if page.history_href %}<a href="{{ page.history_href }}"><i class="bi bi-clock-history"></i> History</a>{% endif %}
+  {% if page.sync_status %}<form method="post" action="{{ page.sync_action }}" class="d-flex align-items-center gap-2"><span class="text-body-secondary">haxy/events: {{ page.sync_status }}</span><button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Sync now</button></form>{% endif %}
+  {% if page.find_action %}
+  <form class="ms-auto" method="post" action="{{ page.find_action }}" role="search">
+    <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span>
+    <input class="form-control" type="search" name="search" value="{{ page.find }}" placeholder="Go to file" autocomplete="off" spellcheck="false"></div>
+  </form>
+  {% endif %}
+</div>
+{% if page.clone %}<div class="mb-2">{% for cmd in page.clone %}<div class="small"><span class="text-body-secondary">{{ cmd.label }}</span> <code>{{ cmd.text }}</code></div>{% endfor %}</div>{% endif %}
+{% macro pathbar() -%}
+<ol class="breadcrumb mb-0 haxy-path">
+  {% for p in page.path %}<li class="breadcrumb-item{% if loop.last %} active{% endif %}">{% if p.href and not loop.last %}<a href="{{ p.href }}">{{ p.label }}</a>{% else %}{{ p.label }}{% endif %}</li>{% endfor %}
+</ol>
+{%- endmacro %}
+{% if page.file %}
+<div class="card haxy-file">
+  <div class="card-header">{{ pathbar() }}</div>
+  {% if page.body.kind == "code" %}{{ body(page.body) }}{% else %}<div class="card-body">{{ body(page.body) }}</div>{% endif %}
+</div>
+{% else %}
+{% if page.find %}<div class="small mb-1">Files matching <strong>{{ page.find }}</strong> · <a href="{{ page.find_clear }}">Clear search</a></div>{% endif %}
+<div class="table-responsive">
+<table class="table table-sm table-hover align-middle haxy-files">
+  <thead><tr><th>{{ pathbar() }}</th></tr></thead>
+  <tbody>
+  {% for e in page.entries %}
+    <tr><td><a href="{{ e.href }}"><i class="bi bi-{% if e.dir %}folder-fill haxy-dir{% else %}file-earmark text-body-secondary{% endif %}"></i> {{ e.name }}</a>{% if e.path %} <span class="small text-body-secondary">{{ e.path }}</span>{% endif %}</td></tr>
+  {% else %}
+    <tr><td class="text-body-secondary">{% if page.find %}No files match.{% else %}This directory is empty.{% endif %}</td></tr>
+  {% endfor %}
+  {% if page.capped %}<tr><td class="small text-body-secondary">This list is cut short; there are more entries than it shows.</td></tr>{% endif %}
+  </tbody>
+</table>
+</div>
+{% if page.readme %}
+<div class="card haxy-readme mt-3">
+  <div class="card-header"><i class="bi bi-book"></i> {{ page.readme_name }}</div>
+  <div class="card-body">{{ body(page.readme) }}</div>
+</div>
+{% endif %}
+{% endif %}
+{% endif %}
+{% endblock %}

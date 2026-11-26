@@ -1,0 +1,25 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{% import "macros.html" as hx %}
+{% block content %}
+{{ ui.heading("Events", "", "journal-text") }}
+<div class="tool-meta d-flex align-items-center gap-2">
+  <span>The haxy/events branch{% if page.sync_status %}: {{ page.sync_status }}{% endif %}</span>
+  {% if page.sync_action %}<form method="post" action="{{ page.sync_action }}"><button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Sync now</button></form>{% endif %}
+</div>
+{% if page.moment is not none %}<h2 class="h5">Transaction {{ page.moment }} <a class="small fw-normal" href="{{ page.all_href }}">All events</a></h2>{% endif %}
+{{ ui.tabs(page.tabs) }}
+<div class="table-responsive tool-tabbed">
+<table class="table table-sm table-hover align-middle mb-0">
+  <thead><tr><th>Event</th><th>Author</th><th>Id</th></tr></thead>
+  <tbody>
+  {% for r in page.rows %}
+    <tr{% if r.selected %} class="table-active"{% endif %}><td class="fw-semibold">{% if r.href %}<a href="{{ r.href }}">{{ r.kind }}</a>{% else %}{{ r.kind }}{% endif %}</td><td>{{ hx.person(r.author) }}</td><td><code>{{ r.id }}</code></td></tr>
+  {% else %}
+    <tr><td colspan="3" class="text-body-secondary">No events.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{{ ui.pager(page.first, page.next, "First page", "Next page") }}
+{% endblock %}

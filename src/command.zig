@@ -87,6 +87,16 @@ pub fn printHelp(cmd_kind_maybe: ?CommandKind, writer: *std.Io.Writer) !void {
         }
     } else {
         try writer.print("help: haxy <command> [<args>]\n\n", .{});
+        try writer.print(
+            \\with no command, haxy opens the TUI (and a web UI on a local port) for the
+            \\repo or pull workspace around the current dir. local mode has no accounts:
+            \\writes are authored by the repo's user.name and user.email.
+            \\  --workspace DIR     view the pull workspace at DIR
+            \\  --web-listen ADDR   no TUI: serve only the web UI on ADDR (like
+            \\                      127.0.0.1:8080) until killed, e.g. as a pull job
+            \\
+            \\
+        , .{});
         inline for (@typeInfo(CommandKind).@"enum".field_values) |value| {
             const help = commandHelp(@fromBackingInt(@intCast(value)));
             // name and description
@@ -224,6 +234,15 @@ pub const StackOptions = struct {
     labels: []const u8 = "",
 };
 
+// `haxy` with no command: local mode
+pub const LocalOptions = struct {
+    // the pull workspace to view instead of the repo around the current dir
+    workspace_path: ?[]const u8 = null,
+    // serve only the web UI, on exactly this address, until killed: no TUI
+    // and no accounts, for running as a background job
+    web_listen: ?[]const u8 = null,
+};
+
 pub const Command = union(CommandKind) {
     serve: srv.Options,
     delete_user: srv.DeleteUserOptions,
@@ -313,7 +332,7 @@ pub const CommandDispatch = union(enum) {
     },
     help: ?CommandKind,
     // local mode, over a pull workspace when one is named
-    local: ?[]const u8,
+    local: LocalOptions,
     cli: Command,
 
     pub fn init(cmd_args: *CommandArgs) !CommandDispatch {
@@ -352,8 +371,10 @@ pub const CommandDispatch = union(enum) {
         } else if (show_help) {
             return .{ .help = null };
         } else {
-            const workspace = if (cmd_args.get("--workspace")) |value_maybe| value_maybe orelse return error.WorkspaceNeedsValue else null;
-            return .{ .local = workspace };
+            var options: LocalOptions = .{};
+            if (cmd_args.get("--workspace")) |value_maybe| options.workspace_path = value_maybe orelse return error.WorkspaceNeedsValue;
+            if (cmd_args.get("--web-listen")) |value_maybe| options.web_listen = value_maybe orelse return error.WebListenNeedsValue;
+            return .{ .local = options };
         }
     }
 };

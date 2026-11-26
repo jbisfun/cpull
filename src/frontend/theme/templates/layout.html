@@ -1,0 +1,100 @@
+{#- The themed tool page: the jbisfun wiki theme in a Jenkins layout (global
+    bar, breadcrumb strip, source-list sidebar, content sheet), the same
+    markup idlci's templates/base.html uses. Pages extend it and fill
+    `content` (and optionally `head`, `sidebar`, `scripts`); the chrome comes
+    from `layout` (see theme.zig Layout). -#}
+{% import "theme/macros.html" as ui %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ layout.title }}</title>
+<meta name="color-scheme" content="light dark">
+<script>
+  // Follow the system light/dark preference (same as the wiki); inline so the page never flashes.
+  const scheme = matchMedia("(prefers-color-scheme: dark)");
+  const applyScheme = () => (document.documentElement.dataset.bsTheme = scheme.matches ? "dark" : "light");
+  applyScheme();
+  scheme.addEventListener("change", applyScheme);
+</script>
+<link rel="icon" href="{{ layout.assets }}/icons/favicon.ico" sizes="32x32">
+<link rel="icon" href="{{ layout.assets }}/icons/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="{{ layout.assets }}/style.css">
+{% for href in layout.stylesheets %}<link rel="stylesheet" href="{{ href }}">
+{% endfor %}
+{% block head %}{% endblock %}
+</head>
+<body>
+<div class="sticky-top">
+<nav class="navbar navbar-expand-lg wiki-globalnav" data-bs-theme="dark">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-semibold d-flex align-items-center gap-2" href="{{ layout.brand_href }}"><img src="{{ layout.assets }}/icons/icon-64.png" alt="" width="24" height="24" class="wiki-logo">{{ layout.site }}</a>
+    <ul class="navbar-nav ms-lg-3 me-auto flex-row">
+      {% for item in layout.nav %}
+      <li class="nav-item"><a class="nav-link{% if item.active %} active{% endif %}" href="{{ item.href }}" data-label="{{ item.label }}"{% if item.active %} aria-current="page"{% endif %}>{{ item.label }}</a></li>
+      {% endfor %}
+    </ul>
+    <div class="d-flex align-items-center gap-2">
+      {% for badge in layout.badges %}<span class="badge text-bg-secondary"{% if badge.title %} title="{{ badge.title }}"{% endif %}>{% if badge.icon %}<i class="bi bi-{{ badge.icon }}"></i> {% endif %}{{ badge.label }}</span>
+      {% endfor %}
+      {% if layout.search %}
+      <form class="d-flex" action="{{ layout.search.action }}" method="{{ layout.search.method }}" role="search">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input class="form-control" type="search" name="{{ layout.search.name }}" value="{{ layout.search.value }}" placeholder="{{ layout.search.placeholder }}" aria-label="Search">
+        </div>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</nav>
+<div class="tool-crumbs">
+  <ol class="breadcrumb">
+    {% for crumb in layout.crumbs %}
+    <li class="breadcrumb-item{% if loop.last and not loop.first %} active{% endif %}">{% if (loop.last and not loop.first) or not crumb.href %}{{ crumb.label }}{% else %}<a href="{{ crumb.href }}">{{ crumb.label }}</a>{% endif %}</li>
+    {% endfor %}
+  </ol>
+</div>
+</div>
+<div class="container-fluid">
+  <div class="row">
+    <nav class="col-lg-3 col-xl-2 wiki-sidebar border-end py-3">
+      <ul>
+        {% block tasks_before %}{% endblock %}
+        {% for t in layout.tasks %}{{ ui.task(t) }}
+        {% endfor %}
+      </ul>
+      {% block sidebar %}
+      {% for g in layout.groups %}
+      <h1 class="d-flex">{{ g.title }}{% if g.more_href %}<a class="ms-auto p-0 m-0 d-inline fw-normal text-lowercase" href="{{ g.more_href }}">{{ g.more_label }}</a>{% endif %}</h1>
+      <ul>
+        {% for r in g.rows %}
+        <li><a class="{% if r.active %}active{% endif %}" href="{{ r.href }}"{% if r.title %} title="{{ r.title }}"{% endif %}>
+          {% if r.ball %}{{ ui.ball(r.ball, "tool-ball") }}{% elif r.icon %}<i class="bi bi-{{ r.icon }}"></i>{% endif %}<span class="text-truncate">{{ r.label }}</span>
+          {% if r.detail %}<span class="ms-auto text-nowrap small">{{ r.detail }}</span>{% endif %}
+        </a></li>
+        {% else %}
+        <li class="tool-muted">{{ g.empty }}</li>
+        {% endfor %}
+      </ul>
+      {% endfor %}
+      {% endblock %}
+    </nav>
+    <main class="col-lg-9 col-xl-10 py-4 px-lg-5 wiki-content" style="min-width: 0">
+      {% for f in layout.flashes %}
+      <div class="alert alert-{{ f.kind }} py-2" role="status">{{ f.text }}</div>
+      {% endfor %}
+      {% block content %}{% endblock %}
+      <footer class="text-end text-body-secondary border-top mt-5 pt-2">
+        {% for item in layout.footer %}{% if not loop.first %} · {% endif %}{% if item.href %}<a href="{{ item.href }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}{% endfor %}
+      </footer>
+    </main>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,34 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{% block content %}
+{{ ui.heading(page.title, "", "person") }}
+{{ ui.search(page.search_action, page.search, "Names starting with…") }}
+<div class="table-responsive">
+<table class="table table-sm table-hover align-middle">
+  <thead><tr><th>Name</th><th>Description</th></tr></thead>
+  <tbody>
+  {% for r in page.rows %}
+    <tr><td><i class="bi bi-{{ r.icon }} text-body-secondary me-1"></i><a class="fw-semibold" href="{{ r.href }}">{{ r.label }}</a></td><td class="text-body-secondary">{{ r.detail }}</td></tr>
+  {% else %}
+    <tr><td colspan="2" class="text-body-secondary">{{ page.empty }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{{ ui.pager(page.prev, page.next) }}
+{% if page.show_forks %}
+<h2 class="mt-4">Forks</h2>
+<div class="table-responsive">
+<table class="table table-sm table-hover align-middle">
+  <thead><tr><th>Patch</th><th>Fork of</th></tr></thead>
+  <tbody>
+  {% for r in page.forks %}
+    <tr><td><a href="{{ r.href }}">{{ r.label }}</a></td><td class="text-body-secondary">{{ r.detail }}</td></tr>
+  {% else %}
+    <tr><td colspan="2" class="text-body-secondary">No forks.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

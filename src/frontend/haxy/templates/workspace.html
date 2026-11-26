@@ -1,0 +1,83 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{% import "macros.html" as hx %}
+{% block content %}
+{% if page.view == "home" %}{{ ui.heading("Repositories", "", "hdd-stack") }}
+{% elif page.view == "issues" %}{{ ui.heading("Open issues", "", "record-circle") }}
+{% elif page.view == "patches" %}{{ ui.heading("Open patches", "", "file-diff") }}
+{% else %}{{ ui.heading("Stacks", "", "stack") }}{% endif %}
+<p class="tool-meta">pull workspace <strong>{{ page.name }}</strong> · {{ page.repos|length }} repos{% if page.events_identity %} · workspace issues and discussions live in <a href="/{{ page.events_identity }}">{{ page.events_identity }}</a>{% endif %}</p>
+{{ ui.tabs(page.tabs) }}
+<div class="table-responsive tool-tabbed">
+{% if page.view == "home" %}
+<table class="table table-sm table-hover align-middle mb-0">
+  <thead><tr>
+    <th class="text-center" title="Checkout against the pullfile pin">S</th>
+    <th>Name <i class="bi bi-arrow-down-short"></i></th>
+    <th>Pullfile Branch</th>
+    <th>Pin</th>
+    <th>State</th>
+    <th>Open Issues</th>
+    <th>Open Patches</th>
+    <th></th>
+  </tr></thead>
+  <tbody>
+  {% for r in page.repos %}
+    <tr>
+      <td class="text-center">{{ ui.ball(r.ball, "ball-lg", r.state) }}</td>
+      <td><a class="fw-semibold" href="{{ r.href }}">{{ r.name }}</a>
+        <div class="small text-body-secondary">{% if r.cloned %}<i class="bi bi-git"></i> {{ r.head_branch }}@{{ r.head }}{% if r.off_branch %} <span class="badge text-bg-warning">off branch</span>{% endif %}{% else %}not cloned{% endif %}</div></td>
+      <td>{{ r.branch }}</td>
+      <td>{% if r.pin %}{{ r.pin }}{% else %}N/A{% endif %}</td>
+      <td>{{ r.state }}</td>
+      <td>{% if r.issues %}<a href="{{ r.issues_href }}">{{ r.issues }}</a>{% else %}N/A{% endif %}</td>
+      <td>{% if r.patches %}<a href="{{ r.patches_href }}">{{ r.patches }}</a>{% else %}N/A{% endif %}</td>
+      <td class="text-end text-nowrap">
+        {% if r.cloned %}<a class="btn btn-sm btn-link p-0 me-2 fs-5" href="{{ r.files_href }}" title="Browse files"><i class="bi bi-folder2-open"></i></a><a class="btn btn-sm btn-link p-0 fs-5" href="{{ r.commits_href }}" title="History"><i class="bi bi-clock-history"></i></a>{% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="text-body-secondary">The pullfile lists no repos.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% elif page.view == "stacks" %}
+<table class="table table-sm table-hover align-middle mb-0">
+  <thead><tr><th class="text-center">S</th><th>Stack</th><th>Repos</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for s in page.stacks %}
+    <tr>
+      <td class="text-center">{{ ui.ball(s.ball, "ball-lg") }}</td>
+      <td><a class="fw-semibold" href="{{ s.href }}">{{ s.title }}</a>{% if s.conflicted %}<div class="small text-danger">conflicted: {{ s.conflicted }}</div>{% endif %}</td>
+      <td>{{ s.members }}</td>
+      <td>{{ s.status }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="text-body-secondary">No stacks yet. <code>pull haxy patch</code> turns work across repos into one.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<table class="table table-sm table-hover align-middle mb-0">
+  <thead><tr><th class="text-center">S</th><th>Repo</th><th>{% if page.view == "issues" %}Issue{% else %}Patch{% endif %}</th><th>{% if page.view == "issues" %}Labels{% else %}Branches{% endif %}</th></tr></thead>
+  <tbody>
+  {% for r in page.list %}
+    <tr>
+      <td class="text-center">{{ ui.ball(r.ball, "", r.status or "open") }}</td>
+      <td>{% if r.first_of_repo %}<a href="{{ r.repo_href }}">{{ r.repo }}</a>{% endif %}</td>
+      <td><a class="fw-semibold" href="{{ r.href }}">{{ r.title }}</a></td>
+      <td>{% if page.view == "issues" %}{% for l in r.labels %}<span class="badge rounded-pill text-bg-secondary haxy-label">{{ l }}</span> {% endfor %}{% else %}<code>{{ r.detail }}</code>{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="text-body-secondary">No open {{ page.view }} in any repo.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+</div>
+{% if page.view == "home" %}
+<div class="small text-body-secondary mt-2">
+  Legend: {{ ui.ball("clean") }} at its pin {{ ui.ball("ahead") }} moved past its pin or off its branch {{ ui.ball("closed") }} unpinned {{ ui.ball("none") }} not cloned
+</div>
+{% endif %}
+{% endblock %}

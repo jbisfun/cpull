@@ -224,27 +224,38 @@ pub fn run(
     }
 }
 
-// serve just the web UI for a single local repo, running `runnable` (the
-// local TUI) in the foreground while the listener runs in the background.
-// when the default port is taken, a random ephemeral port is used instead;
-// the web UI's url is passed to `runnable.run`.
+// serve just the web UI for local mode (a repo or a pull workspace). with no
+// `listen` address, `runnable` (the local TUI) runs in the foreground while
+// the listener runs in the background; when the default port is taken, a
+// random ephemeral port is used instead, and the web UI's url is passed to
+// `runnable.run`. with one, there is no TUI: the listener binds exactly that
+// address and serves until the process is killed, so it can run as a job
+// nobody is attached to.
 pub fn runLocal(
     io: std.Io,
     allocator: std.mem.Allocator,
     local: web.LocalHost,
+    listen_value: ?[]const u8,
     err: *std.Io.Writer,
     runnable: anytype,
 ) !void {
-    // always fall back, so another instance viewing a second repo just binds
-    // its own port
-    const web_listen_address = try parseListenAddress((Options{}).web_listen);
-    var web_server = try listen(io, web_listen_address, .fallback);
+    // without an address, always fall back, so another instance viewing a
+    // second repo just binds its own port
+    const web_listen_address = try parseListenAddress(listen_value orelse (Options{}).web_listen);
+    var web_server = try listen(io, web_listen_address, if (listen_value != null) .exact else .fallback);
     defer web_server.deinit(io);
 
     var tasks: std.Io.Group = .init;
     defer tasks.cancel(io);
 
     runWebListener(io, allocator, &web_server, &tasks, .{ .local = local }, err);
+
+    if (listen_value != null) {
+        try err.print("serving the web UI on http://{s}:{d}/\n", .{ web_listen_address.host, web_server.socket.address.getPort() });
+        try err.flush();
+        try tasks.await(io);
+        return;
+    }
 
     const web_url = try allocator.print("http://localhost:{d}", .{web_server.socket.address.getPort()});
     defer allocator.free(web_url);

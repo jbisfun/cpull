@@ -5,6 +5,10 @@ pub fn build(b: *std.Build) void {
     const xml_mod = b.dependency("xml", .{}).module("xml");
     const ansi_art = ansiArtModule(b);
     const test_filters = b.option([]const []const u8, "test-filter", "Skip tests that do not match any filter") orelse &[0][]const u8{};
+    // the web UI: "wiki" (src/frontend, the jbisfun wiki theme) or "classic"
+    // (haxy's own terminal-grid web UI with the wasm client)
+    const frontend = b.option(enum { wiki, classic }, "frontend", "Web UI to build: wiki (default) or classic") orelse .wiki;
+    const vin_mod = b.dependency("vin", .{}).module("zig-vin");
 
     // wasm
     const wasm_exe = blk: {
@@ -72,6 +76,7 @@ pub fn build(b: *std.Build) void {
         exe.root_module.addAnonymousImport("haxy.wasm", .{
             .root_source_file = wasm_exe.getEmittedBin(),
         });
+        addFrontend(b, exe.root_module, vin_mod, frontend == .wiki);
 
         const install_exe = b.addInstallArtifact(exe, .{});
         b.getInstallStep().dependOn(&install_exe.step);
@@ -95,6 +100,18 @@ pub fn build(b: *std.Build) void {
         run_unit_tests.has_side_effects = true;
         const test_step = b.step("test", "Run unit tests");
         test_step.dependOn(&run_unit_tests.step);
+
+        // the themed-page layer stands alone (std + vin)
+        const theme_tests = b.addTest(.{
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/frontend/theme/theme.zig"),
+                .target = target,
+                .optimize = optimize,
+            }),
+            .filters = test_filters,
+        });
+        theme_tests.root_module.addImport("vin", vin_mod);
+        test_step.dependOn(&b.addRunArtifact(theme_tests).step);
     }
 
     // module for using haxy as a library
@@ -147,6 +164,8 @@ pub fn build(b: *std.Build) void {
         server_exe.root_module.addAnonymousImport("haxy.wasm", .{
             .root_source_file = wasm_exe.getEmittedBin(),
         });
+        // the network tests read haxy's own web UI
+        addFrontend(b, server_exe.root_module, vin_mod, false);
         const install_server_exe = b.addInstallArtifact(server_exe, .{});
 
         const unit_tests = b.addTest(.{
@@ -165,6 +184,15 @@ pub fn build(b: *std.Build) void {
         const test_step = b.step("testnet", "Run network unit tests");
         test_step.dependOn(&run_unit_tests.step);
     }
+}
+
+// the imports src/main.zig's haxy_frontend needs: whether the wiki theme is
+// built in, and the template engine it renders with
+fn addFrontend(b: *std.Build, module: *std.Build.Module, vin_mod: *std.Build.Module, themed: bool) void {
+    const options = b.addOptions();
+    options.addOption(bool, "themed", themed);
+    module.addOptions("frontend_options", options);
+    module.addImport("vin", vin_mod);
 }
 
 // reads every ANSI-art text file while configuring the build. sorting keeps

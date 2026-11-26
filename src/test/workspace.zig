@@ -4,6 +4,7 @@ const rp = xit.repo;
 const evt = @import("../event.zig");
 const ui = @import("../ui.zig");
 const ws = @import("../workspace.zig");
+const cmd = @import("../command.zig");
 
 const GitRepo = rp.Repo(.git, .{});
 const ident = "alice <alice@example.test>";
@@ -22,11 +23,19 @@ const pullfile_text =
     \\</plist>
 ;
 
+// set the repo's own user.name and user.email, as `pull haxy open` pins them
+// to pull's identity
+fn pinIdentity(io: std.Io, allocator: std.mem.Allocator, repo: *GitRepo) !void {
+    try repo.addConfig(io, allocator, .{ .name = "user.name", .value = "alice" });
+    try repo.addConfig(io, allocator, .{ .name = "user.email", .value = "alice@example.test" });
+}
+
 // a repo at `path` with a base commit on master, a `feature` branch one
 // commit ahead touching `file`, and master checked out unless `on_feature`
 fn initRepo(io: std.Io, allocator: std.mem.Allocator, path: []const u8, file: []const u8) !void {
     var repo = try GitRepo.init(io, allocator, .{ .path = path });
     defer repo.deinit(io, allocator);
+    try pinIdentity(io, allocator, &repo);
     {
         const f = try repo.core.work_dir.createFile(io, "base.txt", .{});
         defer f.close(io);
@@ -77,16 +86,18 @@ test "workspace stack lifecycle" {
         defer f.close(io);
         try f.writeStreamingAll(io, pullfile_text);
     }
-    // a global config with an identity, so no test reads the user's
+    // a global config with another identity, so no test reads the user's,
+    // and so the test sees that the workspace never writes as it
     const config_path = try std.Io.Dir.path.join(aa, &.{ root, "gitconfig" });
     {
         const f = try temp.dir.createFile(io, "gitconfig", .{});
         defer f.close(io);
-        try f.writeStreamingAll(io, "[user]\n\tname = alice\n\temail = alice@example.test\n");
+        try f.writeStreamingAll(io, "[user]\n\tname = global\n\temail = global@example.test\n");
     }
     {
         var root_repo = try GitRepo.init(io, allocator, .{ .path = root });
-        root_repo.deinit(io, allocator);
+        defer root_repo.deinit(io, allocator);
+        try pinIdentity(io, allocator, &root_repo);
     }
     try temp.dir.createDirPath(io, "group");
     try initRepo(io, allocator, try std.Io.Dir.path.join(aa, &.{ root, "core" }), "core.txt");
@@ -101,6 +112,12 @@ test "workspace stack lifecycle" {
     try std.testing.expectEqual(3, workspace.repos.len);
     try std.testing.expectEqualStrings(ws.root_key, workspace.events.?.key);
     try std.testing.expectEqualStrings("group.app", workspace.byIdentity(try aa.print("{s}:group.app", .{workspace.name})).?.key);
+
+    // writes are authored by the repo's pinned identity, not the global one
+    {
+        const author = try ui.localAuthor(workspace.source(workspace.byName("core").?), io, allocator, &arena);
+        try std.testing.expectEqualStrings("alice@example.test", author.email);
+    }
 
     // feature is checked out, so master (the target) can move
     const created = try ws.createStack(workspace, aa, "land the api", "", "api", &.{
@@ -167,7 +184,8 @@ test "a stack is all or nothing" {
     }
     {
         var root_repo = try GitRepo.init(io, allocator, .{ .path = root });
-        root_repo.deinit(io, allocator);
+        defer root_repo.deinit(io, allocator);
+        try pinIdentity(io, allocator, &root_repo);
     }
     try temp.dir.createDirPath(io, "group");
     try initRepo(io, allocator, try std.Io.Dir.path.join(aa, &.{ root, "core" }), "core.txt");
@@ -198,4 +216,58 @@ test "a stack is all or nothing" {
         try std.testing.expect(!std.mem.eql(u8, &master, &feature));
     }
     try std.testing.expectEqualStrings("open", detail.status);
+}
+
+test "a workspace repo without pull's identity refuses writes" {
+    const io = std.testing.io;
+    const allocator = std.testing.allocator;
+    var temp = std.testing.tmpDir(.{});
+    defer temp.cleanup();
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const aa = arena.allocator();
+    const root = try temp.dir.realPathFileAlloc(io, ".", aa);
+    {
+        const f = try temp.dir.createFile(io, "pullfile.plist", .{});
+        defer f.close(io);
+        try f.writeStreamingAll(io, pullfile_text);
+    }
+    // the global config has an identity, which must not be used
+    const config_path = try std.Io.Dir.path.join(aa, &.{ root, "gitconfig" });
+    {
+        const f = try temp.dir.createFile(io, "gitconfig", .{});
+        defer f.close(io);
+        try f.writeStreamingAll(io, "[user]\n\tname = global\n\temail = global@example.test\n");
+    }
+    {
+        var root_repo = try GitRepo.init(io, allocator, .{ .path = root });
+        root_repo.deinit(io, allocator);
+    }
+    const core_path = try std.Io.Dir.path.join(aa, &.{ root, "core" });
+    {
+        var repo = try GitRepo.init(io, allocator, .{ .path = core_path });
+        repo.deinit(io, allocator);
+    }
+    const workspace = try ws.Workspace.load(io, allocator, aa, root, config_path);
+    try std.testing.expectError(error.NoPullIdentity, ui.localAuthor(workspace.source(workspace.byName("core").?), io, allocator, &arena));
+    // reading needs no identity
+    {
+        const home = try ws.buildPage(workspace, &arena, .{});
+        try std.testing.expect(home.repos[0].cloned);
+        _ = try ws.buildPage(workspace, &arena, .{ .view = .stacks });
+    }
+    // plain local mode still falls back to the global config
+    const plain: ui.RepoSource = .{ .path = core_path, .repo_kind = .git, .global_config_path = config_path };
+    try std.testing.expectEqualStrings("global@example.test", (try ui.localAuthor(plain, io, allocator, &arena)).email);
+}
+
+test "local mode serves only the web UI on --web-listen" {
+    var args = try cmd.CommandArgs.init(std.testing.allocator, &.{ "--workspace", "/w", "--web-listen", "127.0.0.1:18080" });
+    defer args.deinit();
+    const local = (try cmd.CommandDispatch.init(&args)).local;
+    try std.testing.expectEqualStrings("/w", local.workspace_path.?);
+    try std.testing.expectEqualStrings("127.0.0.1:18080", local.web_listen.?);
+    var plain = try cmd.CommandArgs.init(std.testing.allocator, &.{});
+    defer plain.deinit();
+    try std.testing.expectEqual(null, (try cmd.CommandDispatch.init(&plain)).local.web_listen);
 }

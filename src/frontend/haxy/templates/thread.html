@@ -1,0 +1,80 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{% import "macros.html" as hx %}
+{% macro comment(cm) -%}
+<div class="card haxy-comment mb-2{% if cm.focused %} haxy-focused{% endif %}" id="comment-{{ cm.id }}">
+  <div class="card-header d-flex flex-wrap align-items-center gap-2 small">
+    <i class="bi bi-person-circle text-body-secondary"></i><span class="fw-semibold">{{ hx.person(cm.author) }}</span>
+    <a class="text-body-secondary" href="{{ cm.permalink }}">{{ ui.time(cm.time) }}</a>
+    {% if cm.reply_to %}<a class="text-body-secondary" href="{{ cm.reply_to_href }}"><i class="bi bi-reply"></i> replying to {{ cm.reply_to }}</a>{% endif %}
+    <span class="ms-auto">
+      {% if cm.reply_href %}<a href="{{ cm.reply_href }}">Reply</a>{% endif %}
+      {% if cm.edit_href %} · <a href="{{ cm.edit_href }}">Edit</a>{% endif %}
+      {% if cm.remove_href %} · <a class="text-danger" href="{{ cm.remove_href }}">Remove</a>{% endif %}
+    </span>
+  </div>
+  <div class="card-body">{% if cm.removed %}<p class="text-body-secondary fst-italic mb-0">(removed)</p>{% else %}{{ cm.body }}{% endif %}</div>
+</div>
+{%- endmacro %}
+{% block tasks_before %}{{ ui.back(page.back_href, "Back to " ~ page.back_label) }}{% endblock %}
+{% block content %}
+{{ ui.heading(page.title, page.ball) }}
+<div class="tool-meta d-flex flex-wrap align-items-center gap-2">
+  <span>{{ hx.status(page.status, page.ball) }} {{ hx.person(page.author) }} opened this {{ page.noun }} {{ ui.time(page.opened) }} · {{ page.comment_count }} comments</span>
+  <span class="ms-auto d-flex gap-2">
+    {% if page.close_action %}<form method="post" action="{{ page.close_action }}"><button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-check-circle"></i> Close {{ page.noun }}</button></form>{% endif %}
+    {% if page.open_action %}<form method="post" action="{{ page.open_action }}"><button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-record-circle"></i> Reopen {{ page.noun }}</button></form>{% endif %}
+    {% if page.edit_href %}<a class="btn btn-sm btn-outline-secondary" href="{{ page.edit_href }}"><i class="bi bi-pencil"></i> Edit</a>{% endif %}
+    {% if page.remove_href %}<a class="btn btn-sm btn-outline-danger" href="{{ page.remove_href }}"><i class="bi bi-trash"></i> Remove</a>{% endif %}
+  </span>
+</div>
+{% if page.conflict %}<div class="alert alert-secondary py-2">This {{ page.noun }} has a metadata conflict; resolve it in haxy's terminal UI.</div>{% endif %}
+<div class="row">
+  <div class="col-xl-9">
+    {% if page.facts %}
+    <dl class="tool-facts mb-3">{% for f in page.facts %}<dt>{{ f.term }}</dt><dd>{% if f.href %}<a href="{{ f.href }}">{% endif %}{% if f.mono %}<code>{{ f.value }}</code>{% else %}{{ f.value }}{% endif %}{% if f.href %}</a>{% endif %}</dd>{% endfor %}</dl>
+    {% endif %}
+    {% if page.focused %}
+    <h2 class="h6 text-body-secondary">Comment on <a href="{{ page.thread_href }}">{{ page.title }}</a></h2>
+    {{ comment(page.focused) }}
+    <h2 class="h5 mt-3">{{ page.comment_count }} replies</h2>
+    {% else %}
+    <div class="card haxy-comment mb-3">
+      <div class="card-header small"><i class="bi bi-person-circle text-body-secondary"></i> <span class="fw-semibold">{{ hx.person(page.author) }}</span> <span class="text-body-secondary">opened this {{ page.noun }} {{ ui.time(page.opened) }}</span></div>
+      <div class="card-body">{% if page.has_description %}{{ page.description }}{% if page.more_href %}<p class="small mb-0"><a href="{{ page.more_href }}">Show the whole description</a></p>{% endif %}{% else %}<p class="text-body-secondary mb-0">No description.</p>{% endif %}</div>
+    </div>
+    {% if page.show_conversation %}<h2 class="h5">Conversation <span class="text-body-secondary">({{ page.comment_count }})</span></h2>{% endif %}
+    {% endif %}
+    {% for cm in page.comments %}{{ comment(cm) }}{% endfor %}
+    {{ ui.pager(page.prev, page.next) }}
+    {% if page.compose_action %}
+    <form class="mt-3" method="post" action="{{ page.compose_action }}">
+      {{ ui.textarea(page.compose_label, "body", "", 4, "Markdown.", true) }}
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-chat-left-text"></i> Comment</button>
+    </form>
+    {% endif %}
+  </div>
+  <aside class="col-xl-3 small">
+    <div class="tool-side-title">Labels</div>
+    <p>{% if page.labels %}{{ hx.chips(page.labels) }}{% else %}<span class="text-body-secondary">None yet</span>{% endif %}</p>
+    {% if page.kind == "issue" %}
+    <div class="tool-side-title">Assignees</div>
+    <ul class="list-unstyled">
+      {% for a in page.assignees %}<li class="d-flex align-items-center gap-1"><a href="{{ a.href }}">{{ a.name }}</a>{% if a.unassign_action %}<form method="post" action="{{ a.unassign_action }}"><button class="btn btn-link btn-sm p-0 text-danger" type="submit" title="Unassign"><i class="bi bi-x"></i></button></form>{% endif %}</li>
+      {% else %}<li class="text-body-secondary">Nobody is assigned.</li>{% endfor %}
+    </ul>
+    {% if page.assign_action %}
+    <form method="post" action="{{ page.assign_action }}" class="input-group input-group-sm mb-3">
+      <input class="form-control" name="assignee" placeholder="{{ page.assign_placeholder }}" autocomplete="off">
+      <button class="btn btn-outline-secondary" type="submit">Assign</button>
+    </form>
+    {% endif %}
+    {% endif %}
+    <div class="tool-side-title">Attachments</div>
+    <ul class="list-unstyled">
+      {% for a in page.attachments %}<li><i class="bi bi-paperclip"></i> <a href="{{ a.href }}">{{ a.name }}</a>{% if a.remove_href %} <a class="text-danger" href="{{ a.remove_href }}" title="Remove"><i class="bi bi-x"></i></a>{% endif %}</li>
+      {% else %}<li class="text-body-secondary">Nothing attached.</li>{% endfor %}
+    </ul>
+  </aside>
+</div>
+{% endblock %}

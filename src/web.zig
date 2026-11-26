@@ -627,7 +627,14 @@ fn authorizeWrite(
                 try respondRepoNotFound(request);
                 return null;
             };
-            return .{ .author = try ui.localAuthor(src, io, allocator, arena), .role = .owner };
+            const author = ui.localAuthor(src, io, allocator, arena) catch |author_err| switch (author_err) {
+                error.NoPullIdentity => {
+                    try respondNoPullIdentity(request);
+                    return null;
+                },
+                else => |e| return e,
+            };
+            return .{ .author = author, .role = .owner };
         },
     };
     const authorization: ui.Authorization = blk: {
@@ -689,6 +696,16 @@ fn requestUserId(request: *std.http.Server.Request, session_store: SessionStore)
 // so the connection closes.
 fn respondLoginRequired(request: *std.http.Server.Request) !void {
     try request.respond("log in to make changes", .{
+        .status = .forbidden,
+        .keep_alive = false,
+        .extra_headers = &.{.{ .name = "content-type", .value = "text/plain" }},
+    });
+}
+
+// refuse a write to a pull workspace's repo whose config doesn't name pull's
+// identity. the body goes unread, so the connection closes.
+fn respondNoPullIdentity(request: *std.http.Server.Request) !void {
+    try request.respond("this repo has no user.name and user.email in its git config to write as: start haxy with `pull haxy open`, which sets them to pull's identity", .{
         .status = .forbidden,
         .keep_alive = false,
         .extra_headers = &.{.{ .name = "content-type", .value = "text/plain" }},

@@ -1,0 +1,30 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{% import "macros.html" as hx %}
+{% block tasks_before %}{{ ui.back(page.back, "Back") }}{% endblock %}
+{% block content %}
+{{ ui.heading(page.heading, "", "trash" if page.confirm else "pencil-square") }}
+{% if page.subtitle %}<p class="tool-meta">{{ page.subtitle }}</p>{% endif %}
+{% if page.quoted %}
+<div class="card haxy-comment mb-3"><div class="card-header small fw-semibold">{{ hx.person(page.quoted.author) }} · {{ ui.time(page.quoted.time) }}</div><div class="card-body">{{ page.quoted.body }}</div></div>
+{% endif %}
+{% if page.error_text %}<div class="alert alert-danger py-2" role="alert">{{ page.error_text }}</div>{% endif %}
+<form method="post" action="{{ page.action }}" style="max-width: 48rem">
+  {% if page.confirm %}
+  <div class="alert alert-secondary">{{ page.confirm }}</div>
+  <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-trash"></i> {{ page.submit }}</button>
+  {% else %}
+  {% for f in page.fields %}
+  <div class="mb-3">
+    <label class="form-label" for="f-{{ f.name }}">{{ f.label }}</label>
+    {% if f.textarea %}<textarea class="form-control font-monospace{% if f.invalid %} is-invalid{% endif %}" id="f-{{ f.name }}" name="{{ f.name }}" rows="{{ f.rows }}">
+{{ f.value }}</textarea>
+    {% else %}<input class="form-control{% if f.mono %} font-monospace{% endif %}{% if f.invalid %} is-invalid{% endif %}" id="f-{{ f.name }}" name="{{ f.name }}" value="{{ f.value }}" autocomplete="off" spellcheck="false">{% endif %}
+    {% if f.hint %}<div class="form-text">{{ f.hint }}</div>{% endif %}
+  </div>
+  {% endfor %}
+  <button type="submit" class="btn btn-primary btn-sm">{{ page.submit }}</button>
+  {% endif %}
+  <a class="btn btn-outline-secondary btn-sm ms-1" href="{{ page.back }}">Cancel</a>
+</form>
+{% endblock %}

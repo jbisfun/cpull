@@ -81,11 +81,12 @@ What's in place in pull:
 1. Fix the pull build. Run `zig build test` in pull and haxy, the full suites. The mcp test counts tools (`7` haxy tools), so update it when adding tools.
 2. MCP tools haxy_stacks, haxy_stack, haxy_patch and haxy_merge in `pkgs/mcp/src/haxy.zig` (bump the count in mcp.zig).
 3. ycode-pull panel: add a stacks section (list/open/merge) in `haxy.x.lua`. Not started.
-4. Server angle (task 4):
-   - Confirm a pushed `stack` event is accepted by `haxy serve`. It should be, via the same consume path.
-   - Repo names: `.` must be valid in haxy repo names; check `evt.User.validateName`/repo-name validation.
-   - A server-side stack page resolving members across the owner's repos is NOT done.
-5. Docs: a short `docs/workspace.md` in haxy (events repo, URL scheme, `/`→`.` mapping, stack JSON) and a short section in pull's README.
+4. DONE (server angle):
+   - testnet "push events" pushes a `stack` event to a repo named `group.testrepo`. `haxy serve` consumes it, so `.` in repo names works (Repo.validateName already allowed it).
+   - Still NOT done: a server-side stack page that resolves members across the owner's repos.
+5. DONE in haxy: docs/workspace.md, plus links from README/local.md. pull's README section is not written yet.
+   - Also done: the account-less workspace web server. `haxy [--workspace DIR] --web-listen ADDR` has no TUI and binds exactly ADDR. `pull haxy open --web-listen ADDR` pins the identity first.
+   - Workspace repos author writes only from their own repo-local user.* config (`RepoSource.pull_identity`). Without it they refuse with error.NoPullIdentity / HTTP 403, and never fall back to the global config. Reads don't need an identity.
 6. E2E in scratch (~/.hermes/cache/scratch/haxy-stack):
    - Setup:
      - File:// bare remotes.

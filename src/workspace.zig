@@ -82,7 +82,7 @@ pub const Workspace = struct {
     }
 
     pub fn source(self: *const Workspace, repo: Repo) ui.RepoSource {
-        return .{ .path = repo.path, .repo_kind = .git, .global_config_path = self.global_config_path };
+        return .{ .path = repo.path, .repo_kind = .git, .global_config_path = self.global_config_path, .pull_identity = true };
     }
 
     pub fn byName(self: *const Workspace, name: []const u8) ?Repo {
@@ -144,7 +144,7 @@ pub fn createStack(ws: *const Workspace, arena: std.mem.Allocator, title: []cons
         var id_bytes: [evt.event_id_size]u8 = undefined;
         ws.io.random(&id_bytes);
         const id = std.fmt.bytesToHex(id_bytes, .lower);
-        try withRepo(ws, repo, struct {
+        try withRepo(ws, repo, true, struct {
             fn run(comptime opts: rp.RepoOpts(.git), w: *const Workspace, r: *rp.Repo(.git, opts), author: evt.CommitAuthor, args: anytype) !void {
                 try pch.writeBranchPatch(.local, .git, opts, w.io, w.gpa, r, args.id, .{
                     .title = args.title,
@@ -161,7 +161,7 @@ pub fn createStack(ws: *const Workspace, arena: std.mem.Allocator, title: []cons
     var stack_id: [evt.event_id_size]u8 = undefined;
     ws.io.random(&stack_id);
     const stack: evt.Stack = .{ .title = title, .description = description, .labels = labels, .members = try evt.Stack.formatMembers(arena, created.items) };
-    try withRepo(ws, events, struct {
+    try withRepo(ws, events, true, struct {
         fn run(comptime opts: rp.RepoOpts(.git), w: *const Workspace, r: *rp.Repo(.git, opts), author: evt.CommitAuthor, args: anytype) !void {
             try evt.Stack.write(.local, .git, opts, w.io, w.gpa, r, args.id, args.stack, author);
         }
@@ -180,7 +180,7 @@ pub fn readStack(ws: *const Workspace, arena: *std.heap.ArenaAllocator, id: []co
 pub fn listStacks(ws: *const Workspace, arena: *std.heap.ArenaAllocator) ![]const evt.Stack.WithId {
     const events = ws.events orelse return &.{};
     var out: []const evt.Stack.WithId = &.{};
-    try withRepo(ws, events, struct {
+    try withRepo(ws, events, false, struct {
         fn run(comptime opts: rp.RepoOpts(.git), w: *const Workspace, r: *rp.Repo(.git, opts), _: evt.CommitAuthor, args: anytype) !void {
             try evt.consume(.local, .repo, .git, opts, w.io, w.gpa, r, evt.events_ref, &.{});
             var db = (try evt.LocalEventDB(opts.hash).openReadOnly(w.io, w.gpa, r.core.repo_dir)) orelse return;
@@ -238,7 +238,7 @@ pub fn mergeStack(ws: *const Workspace, arena: *std.heap.ArenaAllocator, id: []c
 
     stack.status = .{ .merged = .{ .pins = lines.items } };
     const id_bytes = try evt.parseEventId(&found.id);
-    try withRepo(ws, events, struct {
+    try withRepo(ws, events, true, struct {
         fn run(comptime opts: rp.RepoOpts(.git), w: *const Workspace, r: *rp.Repo(.git, opts), author: evt.CommitAuthor, args: anytype) !void {
             try evt.Stack.write(.local, .git, opts, w.io, w.gpa, r, args.id, args.stack, author);
         }
@@ -276,7 +276,7 @@ pub const MemberState = struct {
 pub fn memberMerge(ws: *const Workspace, arena: *std.heap.ArenaAllocator, repo: Repo, patch_id: []const u8, mode: enum { check, merge }) !MemberState {
     var state: MemberState = .{ .outcome = .missing };
     const id = evt.parseEventId(patch_id) catch return state;
-    withRepo(ws, repo, struct {
+    withRepo(ws, repo, mode == .merge, struct {
         fn run(comptime opts: rp.RepoOpts(.git), w: *const Workspace, r: *rp.Repo(.git, opts), author: evt.CommitAuthor, args: anytype) !void {
             try mergeInRepo(opts, w, r, author, args.arena, args.id, args.merge, args.state);
         }
@@ -367,14 +367,16 @@ fn mergeInRepo(
     out.status = "merged";
 }
 
-// run `f(opts, ws, repo, author, args)` on the git repo `r` points at
-fn withRepo(ws: *const Workspace, r: Repo, comptime f: anytype, args: anytype) !void {
+// run `f(opts, ws, repo, author, args)` on the git repo `r` points at. the
+// author, pull's identity as pinned in the repo's config, is only resolved
+// (and required) when `f` writes; a reader gets a placeholder it must not use.
+fn withRepo(ws: *const Workspace, r: Repo, write: bool, comptime f: anytype, args: anytype) !void {
     var arena = std.heap.ArenaAllocator.init(ws.gpa);
     defer arena.deinit();
     const src = ws.source(r);
     var any_repo = try rp.AnyRepo(.git, .{}).open(ws.io, ws.gpa, src.localInitOpts());
     defer any_repo.deinit(ws.io, ws.gpa);
-    const author = try ui.localAuthor(src, ws.io, ws.gpa, &arena);
+    const author = if (write) try ui.localAuthor(src, ws.io, ws.gpa, &arena) else ui.local_author_fallback;
     switch (any_repo) {
         inline else => |*repo| try f(repo.self_repo_opts, ws, repo, author, args),
     }
@@ -425,7 +427,9 @@ pub fn buildPage(ws: *Workspace, arena: *std.heap.ArenaAllocator, route: ui.Rout
     var issues: std.ArrayList(ui.Workspace.IssueRow) = .empty;
     var patches: std.ArrayList(ui.Workspace.PatchRow) = .empty;
     const lists = route.view == .home or route.view == .issues or route.view == .patches;
-    const all = if (ws.events) |e| try std.mem.concat(aa, Repo, &.{ &.{e}, ws.repos }) else ws.repos;
+    // the root repo, when it's the events repo, isn't one of the pullfile's
+    const root_events: ?Repo = if (ws.events) |e| if (e.name.len == 0) e else null else null;
+    const all = if (root_events) |e| try std.mem.concat(aa, Repo, &.{ &.{e}, ws.repos }) else ws.repos;
     for (all) |repo| {
         const identity = try ws.identity(aa, repo);
         const pin = if (pf) |p| blk: {
@@ -519,7 +523,7 @@ pub fn stackDetail(ws: *const Workspace, arena: *std.heap.ArenaAllocator, id: []
 
 // a repo row's head, and its open issues and patches
 fn readRepo(ws: *const Workspace, arena: *std.heap.ArenaAllocator, repo: Repo, identity: []const u8, row: *ui.Workspace.RepoRow, issues: ?*std.ArrayList(ui.Workspace.IssueRow), patches: ?*std.ArrayList(ui.Workspace.PatchRow)) !void {
-    try withRepo(ws, repo, struct {
+    try withRepo(ws, repo, false, struct {
         fn run(comptime opts: rp.RepoOpts(.git), w: *const Workspace, r: *rp.Repo(.git, opts), _: evt.CommitAuthor, args: anytype) !void {
             const aa = args.arena.allocator();
             args.row.cloned = true;

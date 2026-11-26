@@ -1,0 +1,21 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{% block content %}
+{{ ui.heading("Branches & Tags", "", "signpost-split") }}
+{{ ui.search(page.search_action, page.search, "Names starting with…") }}
+<div class="row">
+{% for col in page.columns %}
+  <div class="col-md-6">
+    <h2 class="h5"><i class="bi bi-{{ col.icon }}"></i> {{ col.title }}</h2>
+    <table class="table table-sm table-hover align-middle">
+      <tbody>
+      {% for r in col.rows %}<tr><td><a href="{{ r.href }}">{{ r.label }}</a></td></tr>
+      {% else %}<tr><td class="text-body-secondary">{{ col.empty }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {{ ui.pager(col.prev, col.next) }}
+  </div>
+{% endfor %}
+</div>
+{% endblock %}

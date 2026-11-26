@@ -11,6 +11,10 @@ const ws = @import("./workspace.zig");
 // isn't mangled by raw mode and the alternate buffer
 pub const std_options_debug_io = xit.xitui.terminal.crash_debug_io;
 
+// the web UI: the jbisfun wiki theme (src/frontend), unless built with
+// -Dfrontend=classic, which keeps haxy's own terminal-grid web UI
+pub const haxy_frontend: web.Frontend = if (@import("frontend_options").themed) @import("frontend/haxy/frontend.zig").frontend else .{};
+
 pub const RunOpts = struct {
     out: *std.Io.Writer,
     err: *std.Io.Writer,
@@ -92,7 +96,7 @@ pub fn run(
             },
         },
         .help => |cmd_kind_maybe| try cmd.printHelp(cmd_kind_maybe, run_opts.out),
-        .local => |workspace_arg| {
+        .local => |local_opts| {
             // session-lifetime allocations (the repo path, session state)
             var session_arena = std.heap.ArenaAllocator.init(allocator);
             defer session_arena.deinit();
@@ -127,7 +131,7 @@ pub fn run(
 
             // a pull workspace around the current dir, unless one of its
             // repos is nearer, or the one --workspace names
-            const workspace_root: ?[]const u8 = if (workspace_arg) |arg|
+            const workspace_root: ?[]const u8 = if (local_opts.workspace_path) |arg|
                 try std.Io.Dir.path.resolve(session_arena.allocator(), &.{ cwd_path, arg })
             else
                 try ws.detect(io, session_arena.allocator(), cwd_path, if (found) |f| f.path else null);
@@ -174,7 +178,7 @@ pub fn run(
             };
 
             const local: web.LocalHost = if (workspace) |w| .{ .workspace = &w.host, .workspace_name = w.name } else .{ .source = found };
-            try srv.runLocal(io, allocator, local, run_opts.err, Runnable{ .io = io, .allocator = allocator, .session = &session });
+            try srv.runLocal(io, allocator, local, local_opts.web_listen, run_opts.err, Runnable{ .io = io, .allocator = allocator, .session = &session });
         },
         .cli => |cli_cmd| switch (cli_cmd) {
             .serve => |options| try srv.run(repo_kind, any_repo_opts, io, allocator, cwd_path, options, run_opts.err, {}),

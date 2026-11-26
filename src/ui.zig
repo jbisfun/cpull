@@ -2393,6 +2393,10 @@ pub const RepoSource = struct {
     global_config_path: ?[]const u8 = null,
     // where scratch databases go, or null for the repo's dir
     temp_path: ?[]const u8 = null,
+    // a pull workspace's repo: writes are authored by the user.name and
+    // user.email of the repo's own config, which pull pins to its identity,
+    // and refused without them, never falling back to the global config
+    pull_identity: bool = false,
 
     // snapshots can be read from any website, so they must not reveal where repos live on disk
     pub fn jsonStringify(self: RepoSource, jw: anytype) !void {
@@ -2524,6 +2528,8 @@ pub fn authorizeUser(
 
 // events created in local mode have no account behind them, so the commit
 // author comes from the repo's config, which the global config feeds into.
+// a pull workspace's repo reads only its own config (see
+// `RepoSource.pull_identity`) and has no fallback.
 pub const local_author_fallback = evt.CommitAuthor{ .name = "haxy", .email = "user@haxy" };
 
 pub fn localAuthor(
@@ -2532,9 +2538,21 @@ pub fn localAuthor(
     allocator: std.mem.Allocator,
     arena: *std.heap.ArenaAllocator,
 ) !evt.CommitAuthor {
+    if (try configAuthor(src, io, allocator, arena)) |author| return author;
+    return if (src.pull_identity) error.NoPullIdentity else local_author_fallback;
+}
+
+fn configAuthor(
+    src: RepoSource,
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    arena: *std.heap.ArenaAllocator,
+) !?evt.CommitAuthor {
+    var opts = src.localInitOpts();
+    if (src.pull_identity) opts.global_config_path = null;
     switch (src.repo_kind) {
         inline else => |repo_kind| {
-            var any_repo = rp.AnyRepo(repo_kind, .{}).open(io, allocator, src.localInitOpts()) catch return local_author_fallback;
+            var any_repo = rp.AnyRepo(repo_kind, .{}).open(io, allocator, opts) catch return null;
             defer any_repo.deinit(io, allocator);
 
             switch (any_repo) {
@@ -2542,9 +2560,9 @@ pub fn localAuthor(
                     var config = try repo.listConfig(io, allocator);
                     defer config.deinit();
 
-                    const user = config.sections.get("user") orelse return local_author_fallback;
-                    const name = user.get("name") orelse return local_author_fallback;
-                    const email = user.get("email") orelse return local_author_fallback;
+                    const user = config.sections.get("user") orelse return null;
+                    const name = user.get("name") orelse return null;
+                    const email = user.get("email") orelse return null;
                     return .{
                         .name = try arena.allocator().dupe(u8, name),
                         .email = try arena.allocator().dupe(u8, email),
