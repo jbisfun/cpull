@@ -31,6 +31,12 @@ pub const Repo = struct {
 
 pub const root_key = "workspace";
 
+// the CI merge gate (src/integrate/gate.zig, installed by main.zig, which has
+// the CI's SQLite): what keeps a stack from merging, or null to let it. it is
+// a hook so this file (and its tests) stay free of the CI.
+pub const MergeGate = *const fn (ws: *const Workspace, arena: *std.heap.ArenaAllocator, stack_id: []const u8) anyerror!?[]const u8;
+pub var merge_gate: ?MergeGate = null;
+
 // the cpull repo name a pullfile repo goes by, here and when its workspace is
 // pushed to a server: cpull names can't hold "/", so a nested "group/name" is
 // "group.name"
@@ -432,8 +438,9 @@ fn hostMergePatch(ctx: *anyopaque, arena: *std.heap.ArenaAllocator, identity: []
 }
 
 // merge a stack and have pull record its pins
-fn hostMerge(ctx: *anyopaque, arena: *std.heap.ArenaAllocator, id: []const u8) anyerror![]const u8 {
+fn hostMerge(ctx: *anyopaque, arena: *std.heap.ArenaAllocator, id: []const u8, force: bool) anyerror![]const u8 {
     const ws: *Workspace = @ptrCast(@alignCast(ctx));
+    if (!force) if (merge_gate) |gate| if (try gate(ws, arena, id)) |reason| return reason;
     const pins = try mergeStack(ws, arena, id);
     const aa = arena.allocator();
     const result = std.process.run(aa, ws.io, .{ .argv = &.{ ws.pull_exe, "cpull", "pin", id }, .cwd = .{ .path = ws.root } }) catch |err|
@@ -637,10 +644,15 @@ pub fn runStackCommand(
         };
     const ws = try Workspace.load(io, gpa, aa, root, global_config_path);
     runStack(ws, &arena, options, out) catch |e| {
-        try err.print("cpull stack {s}: {s}\n", .{ @tagName(options.action), @errorName(e) });
+        if (e == error.CiNotGreen) {
+            try err.print("cpull stack merge: {s}\n", .{gate_reason});
+        } else try err.print("cpull stack {s}: {s}\n", .{ @tagName(options.action), @errorName(e) });
         return error.HandledError;
     };
 }
+
+// why the gate refused a CLI merge (one per process)
+var gate_reason: []const u8 = "";
 
 fn runStack(ws: *Workspace, arena: *std.heap.ArenaAllocator, options: cmd.StackOptions, out: *std.Io.Writer) !void {
     const aa = arena.allocator();
@@ -660,6 +672,10 @@ fn runStack(ws: *Workspace, arena: *std.heap.ArenaAllocator, options: cmd.StackO
         },
         .merge => {
             const found = try readStack(ws, arena, options.args[0]);
+            if (!options.force) if (merge_gate) |gate| if (try gate(ws, arena, &found.id)) |reason| {
+                gate_reason = reason;
+                return error.CiNotGreen;
+            };
             const pins = try mergeStack(ws, arena, &found.id);
             try std.json.Stringify.value(.{ .id = &found.id, .pins = pins }, .{}, out);
         },

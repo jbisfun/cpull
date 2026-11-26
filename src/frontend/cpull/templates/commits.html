@@ -1,6 +1,7 @@
 {% extends "theme/layout.html" %}
 {% import "theme/macros.html" as ui %}
 {% import "macros.html" as hx %}
+{% import "integrate.html" as ig %}
 {% block content %}
 {{ ui.heading("History", "", "clock-history") }}
 <div class="tool-meta d-flex flex-wrap align-items-center gap-2 mb-2">{% if page.picker %}{{ hx.picker(page.picker) }}{% else %}<span><i class="bi bi-git"></i> {{ page.ref_kind }} <code>{{ page.ref_name }}</code></span>{% endif %}<span>{% if page.path %}<code>{{ page.path }}</code> · {% endif %}{% if page.count is not none %}{{ page.count }} commits · {% endif %}<a href="{{ page.files_href }}">Browse files</a></span></div>
@@ -9,18 +10,19 @@
 {% if page.no_commits %}{{ ui.empty("No commits yet.") }}{% else %}
 <div class="table-responsive">
 <table class="table table-sm table-hover align-middle">
-  <thead><tr><th>Commit</th><th>Message</th><th>Author</th><th>When</th><th></th></tr></thead>
+  <thead><tr>{% if page.has_ci %}<th class="text-center" title="CI jobs that ran on the commit">CI</th>{% endif %}<th>Commit</th><th>Message</th><th>Author</th><th>When</th><th></th></tr></thead>
   <tbody>
   {% for r in page.rows %}
     <tr>
+      {% if page.has_ci %}<td class="text-center">{% if r.ci %}{{ ig.ci_ball(r.ci) }}{% endif %}</td>{% endif %}
       <td><a href="{{ r.href }}"><code>{{ r.oid }}</code></a></td>
-      <td><a class="fw-semibold" href="{{ r.href }}">{{ r.summary }}</a>{% if r.merge %} <span class="badge text-bg-secondary">merge</span>{% endif %}{% if r.stats %}<div class="small text-body-secondary">{{ r.stats }}</div>{% endif %}</td>
+      <td>{% if r.summary_html %}<span class="fw-semibold">{{ r.summary_html }}</span> <a class="small" href="{{ r.href }}"><i class="bi bi-box-arrow-in-right"></i></a>{% else %}<a class="fw-semibold" href="{{ r.href }}">{{ r.summary }}</a>{% endif %}{% if r.merge %} <span class="badge text-bg-secondary">merge</span>{% endif %}{% if r.stats %}<div class="small text-body-secondary">{{ r.stats }}</div>{% endif %}</td>
       <td class="text-nowrap">{{ hx.person(r.author) }}</td>
       <td class="text-nowrap small">{{ ui.time(r.time) }}</td>
       <td class="text-end text-nowrap small"><a class="me-2" href="{{ r.diff_href }}">Diff</a><a href="{{ r.files_href }}">Files</a></td>
     </tr>
   {% else %}
-    <tr><td colspan="5" class="text-body-secondary">No commits{% if page.search %} match this search{% endif %}.</td></tr>
+    <tr><td colspan="6" class="text-body-secondary">No commits{% if page.search %} match this search{% endif %}.</td></tr>
   {% endfor %}
   </tbody>
 </table>

@@ -2379,8 +2379,9 @@ pub const WorkspaceHost = struct {
     page: *const fn (ctx: *anyopaque, arena: *std.heap.ArenaAllocator, session: *Session, route: RoutablePage.WorkspaceRoute) anyerror!Workspace,
     // the on-disk repo a "<workspace>:<repo>" identity names, or null
     source: *const fn (ctx: *anyopaque, identity: []const u8) ?RepoSource,
-    // merge a stack and record its pins; returns what to tell the user
-    merge: *const fn (ctx: *anyopaque, arena: *std.heap.ArenaAllocator, id: []const u8) anyerror![]const u8,
+    // merge a stack and record its pins; returns what to tell the user.
+    // `force` skips the pullfile's CI gate (`cpull.require_ci`)
+    merge: *const fn (ctx: *anyopaque, arena: *std.heap.ArenaAllocator, id: []const u8, force: bool) anyerror![]const u8,
     // the workspace's repos, cheaply (no repo is opened), for the sidebar of
     // the pages that aren't workspace pages
     repos: ?*const fn (ctx: *anyopaque, arena: *std.heap.ArenaAllocator) anyerror![]const WorkspaceRepo = null,
@@ -3127,7 +3128,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, session: *Session, repo_may
                     try Repo.Events.performSync(allocator, session);
                 },
                 .workspace_merge => |id| if (session.workspace_host) |host| {
-                    const message = host.merge(host.ctx, session.arena, id) catch |err| @errorName(err);
+                    const message = host.merge(host.ctx, session.arena, id, false) catch |err| @errorName(err);
                     session.data.workspace_flash = message;
                     session.refresh_requested = true;
                 },

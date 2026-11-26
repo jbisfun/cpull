@@ -29,6 +29,7 @@
 </p>
 <ul class="list-unstyled mb-4">
   <li class="mb-1"><i class="bi bi-person-fill text-body-secondary"></i> Started by <strong>{{ job.requested_by }}</strong>{% if job.requested_by == "watch" %} (git HEAD changed){% endif %}</li>
+  {% if job.subject %}<li class="mb-1"><i class="bi bi-stack text-body-secondary"></i> Checks <strong>{{ job.subject }}</strong> in its own work tree at {% for line in job.checkout_lines %}<code>{{ line }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</li>{% endif %}
   <li class="mb-1"><i class="bi bi-git text-body-secondary"></i> Revision: <code>{{ job.head or "-" }}</code>
     <span class="text-body-secondary">{{ job.repo or "" }} ({{ job.branch or "detached" }})</span>{% if job.dirty %} <span class="badge text-bg-warning">uncommitted changes</span>{% endif %}</li>
   <li class="mb-1"><i class="bi bi-folder2 text-body-secondary"></i> Project: <a href="/ci/projects/{{ job.project }}">{{ job.project }}</a></li>

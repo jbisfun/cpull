@@ -1,6 +1,7 @@
 {% extends "theme/layout.html" %}
 {% import "theme/macros.html" as ui %}
 {% import "macros.html" as hx %}
+{% import "integrate.html" as ig %}
 {% block content %}
 {% if page.view == "home" %}{{ ui.heading("Repositories", "", "hdd-stack") }}
 {% elif page.view == "issues" %}{{ ui.heading("Open issues", "", "record-circle") }}
@@ -13,6 +14,7 @@
 <table class="table table-sm table-hover align-middle mb-0">
   <thead><tr>
     <th class="text-center" title="Checkout against the pullfile pin">S</th>
+    {% if page.has_ci %}<th class="text-center" title="CI of the repo's idl projects">CI</th>{% endif %}
     <th>Name <i class="bi bi-arrow-down-short"></i></th>
     <th>Pullfile Branch</th>
     <th>Pin</th>
@@ -25,6 +27,7 @@
   {% for r in page.repos %}
     <tr>
       <td class="text-center">{{ ui.ball(r.ball, "ball-lg", r.state) }}</td>
+      {% if page.has_ci %}<td class="text-center">{% if r.ci %}{{ ig.ci_ball(r.ci, "ball-lg") }}{% else %}<span class="text-body-secondary small" title="No idl project, or no CI job yet">N/A</span>{% endif %}</td>{% endif %}
       <td><div class="d-flex align-items-center gap-2">{{ r.avatar }}<div><a class="fw-semibold" href="{{ r.href }}">{{ r.name }}</a>
         <div class="small text-body-secondary">{% if r.cloned %}<i class="bi bi-git"></i> {{ r.head_branch }}@{{ r.head }}{% if r.off_branch %} <span class="badge text-bg-warning">off branch</span>{% endif %}{% else %}not cloned{% endif %}</div></div></div></td>
       <td>{{ r.branch }}</td>
@@ -37,29 +40,30 @@
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="8" class="text-body-secondary">The pullfile lists no repos.</td></tr>
+    <tr><td colspan="9" class="text-body-secondary">The pullfile lists no repos.</td></tr>
   {% endfor %}
   </tbody>
 </table>
 {% elif page.view == "stacks" %}
 <table class="table table-sm table-hover align-middle mb-0">
-  <thead><tr><th class="text-center">S</th><th>Stack</th><th>Repos</th><th>Status</th></tr></thead>
+  <thead><tr><th class="text-center">S</th>{% if page.has_ci %}<th class="text-center">CI</th>{% endif %}<th>Stack</th><th>Repos</th><th>Status</th></tr></thead>
   <tbody>
   {% for s in page.stacks %}
     <tr>
       <td class="text-center">{{ ui.ball(s.ball, "ball-lg") }}</td>
+      {% if page.has_ci %}<td class="text-center">{% if s.ci %}{{ ig.ci_ball(s.ci, "ball-lg") }}{% endif %}</td>{% endif %}
       <td><a class="fw-semibold" href="{{ s.href }}">{{ s.title }}</a>{% if s.conflicted %}<div class="small text-danger">conflicted: {{ s.conflicted }}</div>{% endif %}</td>
       <td>{{ s.members }}</td>
       <td>{{ s.status }}</td>
     </tr>
   {% else %}
-    <tr><td colspan="4" class="text-body-secondary">No stacks yet. <code>pull cpull patch</code> turns work across repos into one.</td></tr>
+    <tr><td colspan="5" class="text-body-secondary">No stacks yet. <code>pull cpull patch</code> turns work across repos into one.</td></tr>
   {% endfor %}
   </tbody>
 </table>
 {% else %}
 <table class="table table-sm table-hover align-middle mb-0">
-  <thead><tr><th class="text-center">S</th><th>Repo</th><th>{% if page.view == "issues" %}Issue{% else %}Patch{% endif %}</th><th>{% if page.view == "issues" %}Labels{% else %}Branches{% endif %}</th></tr></thead>
+  <thead><tr><th class="text-center">S</th><th>Repo</th><th>{% if page.view == "issues" %}Issue{% else %}Patch{% endif %}</th><th>{% if page.view == "issues" %}Labels{% else %}Branches{% endif %}</th>{% if page.has_ci and page.view == "patches" %}<th class="text-center">CI</th>{% endif %}</tr></thead>
   <tbody>
   {% for r in page.list %}
     <tr>
@@ -67,6 +71,7 @@
       <td>{% if r.first_of_repo %}<a class="cpull-repo" href="{{ r.repo_href }}">{{ r.repo_avatar }}{{ r.repo }}</a>{% endif %}</td>
       <td><a class="fw-semibold" href="{{ r.href }}">{{ r.title }}</a></td>
       <td>{% if page.view == "issues" %}{% for l in r.labels %}<span class="badge rounded-pill text-bg-secondary cpull-label">{{ l }}</span> {% endfor %}{% else %}<code>{{ r.detail }}</code>{% endif %}</td>
+      {% if page.has_ci and page.view == "patches" %}<td class="text-center">{% if r.ci %}{{ ig.ci_ball(r.ci) }}{% endif %}</td>{% endif %}
     </tr>
   {% else %}
     <tr><td colspan="4" class="text-body-secondary">No open {{ page.view }} in any repo.</td></tr>
@@ -77,7 +82,7 @@
 </div>
 {% if page.view == "home" %}
 <div class="small text-body-secondary mt-2">
-  Legend: {{ ui.ball("clean") }} at its pin {{ ui.ball("ahead") }} moved past its pin or off its branch {{ ui.ball("closed") }} unpinned {{ ui.ball("none") }} not cloned
+  Legend: {{ ui.ball("clean") }} at its pin {{ ui.ball("ahead") }} moved past its pin or off its branch {{ ui.ball("closed") }} unpinned {{ ui.ball("none") }} not cloned{% if page.has_ci %} · CI: {{ ui.ball("passed") }} passed {{ ui.ball("failed") }} failed {{ ui.ball("running") }} running{% endif %}
 </div>
 {% endif %}
 {% endblock %}

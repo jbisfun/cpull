@@ -1,0 +1,68 @@
+{#- The forge x CI x issues pieces (src/integrate/view.zig): CI balls, the
+    patch and stack CI panels with their Run CI forms, and an issue's
+    references. A summary is {ball, label, href, jobs, green, stale}. -#}
+
+{#- A CI ball linking to its jobs; a grey one when no job ran. -#}
+{% macro ci_ball(s, size="") -%}
+{% if s %}<a class="text-decoration-none" href="{{ s.href }}" title="{{ s.label }}"><i class="bi bi-circle-fill ball ball-{{ s.ball }} {{ size }}"></i></a>{% else %}<i class="bi bi-circle-fill ball ball-none {{ size }}" title="No CI jobs"></i>{% endif %}
+{%- endmacro %}
+
+{#- A summary's jobs as a small table. -#}
+{% macro ci_jobs(s) -%}
+<table class="table table-sm align-middle mb-2 small">
+  <tbody>
+  {% for j in s.jobs %}
+    <tr>
+      <td class="text-center" style="width:2rem"><i class="bi bi-circle-fill ball ball-{{ j.ball }}" title="{{ j.status }}"></i></td>
+      <td><a href="{{ j.href }}">#{{ j.id }}</a> {{ j.label }}</td>
+      <td class="text-nowrap">{% if j.head %}<code>{{ j.head }}</code>{% endif %}</td>
+      <td class="text-nowrap text-body-secondary">{{ j.status }} · {{ j.when }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{%- endmacro %}
+
+{#- A patch's CI: {summary, run_action, repo, id, back, note}. -#}
+{% macro patch_ci(ci) -%}
+<div class="tool-side-title">CI</div>
+<div class="mb-3">
+  {% if ci.summary %}
+  <p class="mb-1">{{ ci_ball(ci.summary) }} <a href="{{ ci.summary.href }}">{{ ci.summary.label }}</a></p>
+  {{ ci_jobs(ci.summary) }}
+  {% else %}<p class="text-body-secondary mb-1">No CI has run on this patch yet.</p>{% endif %}
+  {% if ci.note %}<p class="text-body-secondary mb-0">{{ ci.note }}</p>{% else %}
+  <form method="post" action="{{ ci.run_action }}">
+    <input type="hidden" name="repo" value="{{ ci.repo }}"><input type="hidden" name="id" value="{{ ci.id }}"><input type="hidden" name="back" value="{{ ci.back }}">
+    <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-play-fill"></i> {% if ci.summary %}Run CI again{% else %}Run CI{% endif %}</button>
+  </form>
+  <p class="text-body-secondary mt-1 mb-0">Builds and tests the repo's idl projects at the source branch's tip, in a work tree of its own.</p>
+  {% endif %}
+</div>
+{%- endmacro %}
+
+{#- A stack's CI and merge gate: {summary, run_action, id, back, required, gate_ok, gate_reason}. -#}
+{% macro stack_ci(ci) -%}
+<h2 class="h5 mt-4"><i class="bi bi-activity"></i> CI</h2>
+<div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+  {% if ci.summary %}<span>{{ ci_ball(ci.summary, "ball-lg") }} <a href="{{ ci.summary.href }}">{{ ci.summary.label }}</a></span>
+  {% else %}<span class="text-body-secondary">No CI has run on this stack yet.</span>{% endif %}
+  <form method="post" action="{{ ci.run_action }}" class="ms-auto">
+    <input type="hidden" name="id" value="{{ ci.id }}"><input type="hidden" name="back" value="{{ ci.back }}">
+    <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-play-fill"></i> {% if ci.summary %}Run CI again{% else %}Run CI{% endif %}</button>
+  </form>
+</div>
+{% if ci.summary %}{{ ci_jobs(ci.summary) }}{% endif %}
+<p class="small text-body-secondary">Runs build and test of every member repo's idl projects with all the members' branches checked out together.{% if ci.required %} The pullfile requires green CI to merge (<code>cpull.require_ci</code>): {{ ci.gate_reason }}.{% endif %}</p>
+{%- endmacro %}
+
+{#- What references an issue: {commits, patches, stacks, jobs}. -#}
+{% macro refs(r) -%}
+<h2 class="h5 mt-4"><i class="bi bi-link-45deg"></i> References</h2>
+<ul class="list-unstyled cpull-refs">
+  {% for c in r.commits %}<li class="mb-1">{% if c.ci %}{{ ci_ball(c.ci) }} {% else %}<i class="bi bi-git text-body-secondary"></i> {% endif %}<a href="{{ c.href }}"><code>{{ c.short }}</code></a> {{ c.summary }} <span class="small text-body-secondary">{{ c.repo }}{% if c.closes %} · closes this issue once on the repo's pullfile branch{% endif %}</span></li>{% endfor %}
+  {% for p in r.patches %}<li class="mb-1"><i class="bi bi-file-diff text-body-secondary"></i> Patch <a href="{{ p.href }}">{{ p.title }}</a> <span class="small text-body-secondary">{{ p.repo }} · {{ p.status }}</span></li>{% endfor %}
+  {% for s in r.stacks %}<li class="mb-1"><i class="bi bi-stack text-body-secondary"></i> Stack <a href="{{ s.href }}">{{ s.title }}</a> <span class="small text-body-secondary">{{ s.status }}</span></li>{% endfor %}
+  {% for j in r.jobs %}<li class="mb-1"><i class="bi bi-circle-fill ball ball-{{ j.ball }}" title="{{ j.status }}"></i> CI <a href="{{ j.href }}">#{{ j.id }}</a> {{ j.label }} <span class="small text-body-secondary">{{ j.status }} · {{ j.when }}</span></li>{% endfor %}
+</ul>
+{%- endmacro %}

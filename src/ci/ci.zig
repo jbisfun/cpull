@@ -11,6 +11,7 @@ pub const projects = @import("projects.zig");
 pub const app = @import("app.zig");
 pub const web = @import("web.zig");
 pub const cli = @import("cli.zig");
+pub const work = @import("work.zig");
 
 pub const App = app.App;
 pub const Options = app.Options;
@@ -19,5 +20,6 @@ test {
     _ = db;
     _ = projects;
     _ = @import("fmt.zig");
+    _ = work;
     _ = @import("test.zig");
 }

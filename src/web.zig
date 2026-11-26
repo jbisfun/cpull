@@ -2707,14 +2707,16 @@ fn handleWorkspaceMerge(
     local: LocalHost,
 ) !void {
     const workspace = local.workspace orelse return respondRepoNotFound(request);
-    // the body carries nothing, but it must be read before responding
+    // the body only carries `force` (merge past the CI gate), but it must be read before responding
     const body = try readFormBody(request, allocator);
-    allocator.free(body);
+    defer allocator.free(body);
+    const force_value = try parseFormField(allocator, body, "force");
+    defer if (force_value) |v| allocator.free(v);
     const route = ui.RoutablePage.fromUrlWorkspace(base) orelse return handleWorkspacePatchMerge(request, allocator, base, local);
     if (route != .workspace or route.workspace.view != .stack) return handleWorkspacePatchMerge(request, allocator, base, local);
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    const message = workspace.merge(workspace.ctx, &arena, route.workspace.selected.slice()) catch |err| @errorName(err);
+    const message = workspace.merge(workspace.ctx, &arena, route.workspace.selected.slice(), force_value != null) catch |err| @errorName(err);
     return respondWorkspaceFlash(request, &arena, base, message);
 }
 

@@ -1,6 +1,7 @@
 {% extends "theme/layout.html" %}
 {% import "theme/macros.html" as ui %}
 {% import "macros.html" as hx %}
+{% import "integrate.html" as ig %}
 {% block tasks_before %}{{ ui.back(page.history_href, "Back to History") }}{% endblock %}
 {% block content %}
 {{ ui.heading(page.summary, "", "git") }}
@@ -12,6 +13,7 @@
   <dt>Committed</dt><dd>{{ ui.time(page.time) }}</dd>
   <dt>Parent</dt><dd>{% if page.parent %}<a href="{{ page.parent_href }}"><code>{{ page.parent }}</code></a>{% else %}None (a root commit){% endif %}</dd>
   {% if page.stats %}<dt>Changes</dt><dd>{{ page.stats }}</dd>{% endif %}
+  {% if page.ci %}<dt>CI</dt><dd>{{ ig.ci_ball(page.ci) }} <a href="{{ page.ci.href }}">{{ page.ci.label }}</a></dd>{% endif %}
 </dl>
 <p class="small">
   <a class="btn btn-sm btn-primary" href="{{ page.diff_href }}"><i class="bi bi-file-diff"></i> View changes</a>
@@ -20,5 +22,5 @@
   {% if page.merge_href %}<a class="btn btn-sm btn-outline-secondary" href="{{ page.merge_href }}">Commits from this merge</a>{% endif %}
 </p>
 {% if page.truncated %}<div class="alert alert-secondary py-1 small">This message is longer than cpull reads; only its start is shown.</div>{% endif %}
-<pre class="console">{{ page.message }}</pre>
+<pre class="console">{% if page.message_html %}{{ page.message_html }}{% else %}{{ page.message }}{% endif %}</pre>
 {% endblock %}

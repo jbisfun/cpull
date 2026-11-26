@@ -2,6 +2,7 @@
 {% import "theme/macros.html" as ui %}
 {% import "macros.html" as hx %}
 {% import "report.html" as rp %}
+{% import "integrate.html" as ig %}
 {% macro comment(cm) -%}
 <div class="card cpull-comment mb-2{% if cm.focused %} cpull-focused{% endif %}" id="comment-{{ cm.id }}">
   <div class="card-header d-flex flex-wrap align-items-center gap-2 small">
@@ -51,6 +52,7 @@
     {% if page.show_conversation %}<h2 class="h5">Conversation <span class="text-body-secondary">({{ page.comment_count }})</span></h2>{% endif %}
     {% endif %}
     {% for cm in page.comments %}{{ comment(cm) }}{% endfor %}
+    {% if page.refs %}{{ ig.refs(page.refs) }}{% endif %}
     {{ ui.pager(page.prev, page.next) }}
     {% if page.compose_action %}
     <form class="mt-3" method="post" action="{{ page.compose_action }}">
@@ -60,6 +62,7 @@
     {% endif %}
   </div>
   <aside class="col-xl-3 small">
+    {% if page.ci %}{{ ig.patch_ci(page.ci) }}{% endif %}
     <div class="tool-side-title">Labels</div>
     <p>{% if page.labels %}{{ hx.chips(page.labels) }}{% else %}<span class="text-body-secondary">None yet</span>{% endif %}</p>
     {% if page.kind == "issue" %}

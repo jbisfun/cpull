@@ -7,6 +7,7 @@ const ui = @import("./ui.zig");
 const web = @import("./web.zig");
 const ws = @import("./workspace.zig");
 const ci = @import("./ci/ci.zig");
+const integrate = @import("./integrate/integrate.zig");
 const evt = @import("./event.zig");
 
 // cook the terminal before a panic/segfault trace is printed, so the trace
@@ -52,8 +53,10 @@ pub fn main(init: std.process.Init) !u8 {
         try args.append(allocator, arg);
     }
 
-    var stdout_writer = std.Io.File.stdout().writer(io, &.{});
-    var stderr_writer = std.Io.File.stderr().writer(io, &.{});
+    // streaming, not positional: when stderr is a file (a pull job's log), a
+    // positional writer writes from offset 0 over what std.log appended
+    var stdout_writer = std.Io.File.stdout().writerStreaming(io, &.{});
+    var stderr_writer = std.Io.File.stderr().writerStreaming(io, &.{});
 
     var environ_map = try std.process.Environ.createMap(init.minimal.environ, allocator);
     defer environ_map.deinit();
@@ -216,13 +219,18 @@ pub fn run(
                     mounts[0] = .{ .prefix = ci.web.prefix, .ctx = app, .handle = ci.web.handle };
                     local.mounts = &mounts;
                 }
+                // forge x CI x issues: status everywhere, patch/stack CI, the merge gate, CI issues, commit links
+                integrate.install(w, ci_app, .{ .links_interval = if (local_opts.ci_watch) local_opts.ci_watch_interval else 30 });
             };
             try srv.runLocal(io, allocator, local, local_opts.web_listen, run_opts.err, Runnable{ .io = io, .allocator = allocator, .session = &session });
         },
         .cli => |cli_cmd| switch (cli_cmd) {
             .serve => |options| try srv.run(repo_kind, any_repo_opts, io, allocator, cwd_path, options, run_opts.err, {}),
             .delete_user => |options| try srv.deleteUser(io, allocator, cwd_path, options, run_opts.out, run_opts.err),
-            .stack => |options| try ws.runStackCommand(io, allocator, cwd_path, options, run_opts.global_config_path, run_opts.out, run_opts.err),
+            .stack => |options| {
+                integrate.installCli();
+                try ws.runStackCommand(io, allocator, cwd_path, options, run_opts.global_config_path, run_opts.out, run_opts.err);
+            },
             .report => |options| try @import("report/report.zig").run(io, allocator, cwd_path, options, run_opts.global_config_path, run_opts.out, run_opts.err),
             .wiki => |options| try @import("wiki/wiki.zig").runCommand(io, allocator, cwd_path, options, run_opts.err),
             .records => |options| try @import("records.zig").run(io, allocator, cwd_path, options, run_opts.global_config_path, run_opts.out),
