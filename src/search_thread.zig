@@ -4,7 +4,7 @@ const srch = @import("search.zig");
 const xit = @import("xit");
 const hash = xit.hash;
 
-// the thread search indexes: one per kind, inside the haxy moment, so events
+// the thread search indexes: one per kind, inside the cpull moment, so events
 // carry them and every host that consumes events builds them. a doc key is the
 // thread's creation order key, which never changes. issues and patches list in
 // that order too, so their list sets filter a query by intersection.

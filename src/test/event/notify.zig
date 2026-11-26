@@ -4,7 +4,7 @@ const notify = @import("../../notify.zig");
 const xit = @import("xit");
 const rp = xit.repo;
 
-const author = evt.CommitAuthor{ .name = "haxyuser", .email = "user@haxy" };
+const author = evt.CommitAuthor{ .name = "cpulluser", .email = "user@cpull" };
 const repo_opts: rp.RepoOpts(.xit) = .{ .hash = .sha1 };
 
 fn unreadCount(io: std.Io, allocator: std.mem.Allocator, users_path: []const u8, user_id: *const [evt.event_id_size]u8) !u64 {

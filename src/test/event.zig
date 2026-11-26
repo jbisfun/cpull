@@ -5,7 +5,7 @@ const rp = xit.repo;
 const rf = xit.ref;
 const hash = xit.hash;
 
-const author = evt.CommitAuthor{ .name = "haxy", .email = "user@haxy" };
+const author = evt.CommitAuthor{ .name = "cpull", .email = "user@cpull" };
 
 test "union field storage" {
     const allocator = std.testing.allocator;

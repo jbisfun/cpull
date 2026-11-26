@@ -156,7 +156,7 @@ pub fn init(
     return result;
 }
 
-// the haxy state as of one transaction in the repo history. a moment page
+// the cpull state as of one transaction in the repo history. a moment page
 // reads from it, so undoing or rebasing later transactions cannot change what
 // it shows, and the events read as they were when the transaction ran
 fn transactionMoment(

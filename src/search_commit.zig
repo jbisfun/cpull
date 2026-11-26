@@ -10,7 +10,7 @@ const mrg = xit.merge;
 const progress = @import("./progress.zig");
 
 // the repo moment key holding one commit-message index per ref tip. it sits
-// outside the haxy moment because pushes change it and events never do. each
+// outside the cpull moment because pushes change it and events never do. each
 // entry is keyed by its commit oid's hash: its value is the index as of that
 // commit, and its key slot holds the raw commit oid followed by its timestamp.
 pub const index_key = "haxy/commit-oid->word->time+oid";

@@ -342,7 +342,7 @@ document.addEventListener("change", (event) => {
     });
 });
 
-WebAssembly.instantiateStreaming(fetch("/haxy.wasm"), importObject).then(async (result) => {
+WebAssembly.instantiateStreaming(fetch("/cpull.wasm"), importObject).then(async (result) => {
     wasmInstance = result.instance;
 
     // wait for the @font-face to load before measuring cell width, otherwise

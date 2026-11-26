@@ -21,7 +21,7 @@ fn accountRoute(route: ui.RoutablePage) bool {
 fn account(c: Ctx, w: *std.Io.Writer, chrome: fe.Chrome) !void {
     try fe.emit(c, w, chrome, "message.html", .{
         .title = "Not in the web UI",
-        .text = "Accounts, keys and new repositories are managed from haxy's terminal UI (ssh into the server), not this web UI.",
+        .text = "Accounts, keys and new repositories are managed from cpull's terminal UI (ssh into the server), not this web UI.",
         .links = &[_]theme.Link{.{ .label = "Home", .href = "/" }},
     });
 }
@@ -60,7 +60,7 @@ pub fn home(c: Ctx, w: *std.Io.Writer, data: *const ui.Home) !void {
     }
     const about = &data.about;
     try fe.emit(c, w, chrome, "about.html", .{
-        .title = about.title orelse "haxy",
+        .title = about.title orelse "cpull",
         .text = try markdown.render(c.aa(), about.text),
         .has_text = std.mem.trim(u8, about.text, " \t\r\n").len > 0,
     });
@@ -119,11 +119,11 @@ fn reposUrl(c: Ctx, name: ui.RoutablePage.Array(evt.User.name_max_len), start: u
     return c.routeUrl(route.withSearch(search));
 }
 
-// forks only exist on a server; their pages stay in haxy's classic UI
+// forks only exist on a server; their pages stay in cpull's classic UI
 pub fn fork(c: Ctx, w: *std.Io.Writer, data: *const ui.Fork) !void {
     try fe.emit(c, w, .{ .title = data.header.name, .crumbs = &.{.{ .label = data.header.name }} }, "message.html", .{
         .title = "Not in the web UI",
-        .text = "Fork pages aren't part of the themed web UI yet. Use haxy's terminal UI, or build haxy with -Dfrontend=classic.",
+        .text = "Fork pages aren't part of the themed web UI yet. Use cpull's terminal UI, or build cpull with -Dfrontend=classic.",
         .links = &[_]theme.Link{.{ .label = "Home", .href = "/" }},
     });
 }

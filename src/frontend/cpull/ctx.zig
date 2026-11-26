@@ -1,5 +1,5 @@
-// what every haxy view builds its template data with: the page arena, the
-// session, and helpers turning haxy's routes, times and authors into strings.
+// what every cpull view builds its template data with: the page arena, the
+// session, and helpers turning cpull's routes, times and authors into strings.
 const std = @import("std");
 const ui = @import("../../ui.zig");
 const evt = @import("../../event.zig");
@@ -31,7 +31,7 @@ pub const Ctx = struct {
         return route.toUrl(c.arena);
     }
 
-    // a route built by one of haxy's builders, which return null when it doesn't fit
+    // a route built by one of cpull's builders, which return null when it doesn't fit
     pub fn routeUrl(c: Ctx, route: ?ui.RoutablePage) ![]const u8 {
         return c.url(route orelse return error.RouteTooLong);
     }

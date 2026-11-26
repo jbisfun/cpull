@@ -48,7 +48,7 @@ pub fn deleteUser(
 
     var admin_repo = rp.Repo(.xit, evt.admin_repo_opts).open(io, allocator, .{ .path = admin_repo_path }) catch |open_err| switch (open_err) {
         error.RepoNotFound, error.FileNotFound => {
-            try err.print("no haxy data in {s}\n", .{data_path});
+            try err.print("no cpull data in {s}\n", .{data_path});
             return error.HandledError;
         },
         else => |e| return e,

@@ -8,7 +8,7 @@ const progress = @import("progress.zig");
 const UserDB = evt.UserDB;
 const hash_kind = evt.user_repo_opts.hash;
 
-// the user repo keys, outside the haxy moment
+// the user repo keys, outside the cpull moment
 const notif_map_key = "haxy/notif-id->notif";
 const recent_notif_id_set_key = "haxy/recent-notif-id-set";
 const unread_notif_id_set_key = "haxy/unread-notif-id-set";

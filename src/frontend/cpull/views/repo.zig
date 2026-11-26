@@ -180,11 +180,11 @@ pub fn page(c: Ctx, w: *std.Io.Writer, data: *const Repo) !void {
     }
 }
 
-// pages the theme leaves to haxy's terminal UI (repo admin)
+// pages the theme leaves to cpull's terminal UI (repo admin)
 fn unsupported(c: Ctx, w: *std.Io.Writer, data: *const Repo) !void {
     try fe.emit(c, w, try chrome(c, data, "Unavailable", &.{}), "message.html", .{
         .title = "Not in the web UI",
-        .text = "This page isn't part of the themed web UI yet. Open it in haxy's terminal UI (run haxy in the repo), or build haxy with -Dfrontend=classic for the original web UI.",
+        .text = "This page isn't part of the themed web UI yet. Open it in cpull's terminal UI (run cpull in the repo), or build cpull with -Dfrontend=classic for the original web UI.",
         .links = &[_]theme.Link{.{ .label = "Files", .href = try tabHref(c, data, .files) }},
     });
 }
@@ -292,7 +292,7 @@ fn files(c: Ctx, w: *std.Io.Writer, data: *const Repo) !void {
 
 const Command = struct { label: []const u8, text: []const u8 };
 
-// the clone commands haxy offers for the repo (server mode)
+// the clone commands cpull offers for the repo (server mode)
 fn cloneCommands(c: Ctx, data: *const Repo) ![]const Command {
     const id = identity(data);
     var list: std.ArrayList(Command) = .empty;

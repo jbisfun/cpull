@@ -2530,7 +2530,7 @@ pub fn authorizeUser(
 // author comes from the repo's config, which the global config feeds into.
 // a pull workspace's repo reads only its own config (see
 // `RepoSource.pull_identity`) and has no fallback.
-pub const local_author_fallback = evt.CommitAuthor{ .name = "haxy", .email = "user@haxy" };
+pub const local_author_fallback = evt.CommitAuthor{ .name = "cpull", .email = "user@cpull" };
 
 pub fn localAuthor(
     src: RepoSource,
@@ -2595,7 +2595,7 @@ pub const Session = struct {
     // where repos opened on the server paths put their scratch databases
     temp_path: ?[]const u8 = null,
     // the single on-disk repo this session views, when running in local mode
-    // (haxy invoked with no arguments inside a repo). null on the server paths,
+    // (cpull invoked with no arguments inside a repo). null on the server paths,
     // which resolve repos from the admin db instead.
     local: ?RepoSource = null,
     // the pull workspace a workspace-mode session views, which builds the

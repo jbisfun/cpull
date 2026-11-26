@@ -34,7 +34,7 @@ pub fn forkPath(allocator: std.mem.Allocator, users_path: []const u8, forker_id:
     return try std.Io.Dir.path.join(allocator, &.{ users_path, &std.fmt.bytesToHex(forker_id.*, .lower), "forks", &std.fmt.bytesToHex(fork_id.*, .lower) });
 }
 
-const forker_section = "haxy";
+const forker_section = "cpull";
 const forker_prefix = "fork-";
 
 // the target repo config name recording who forked a published patch
@@ -152,7 +152,7 @@ fn copyTarget(
     var fork_repo = try rp.Repo(.xit, repo_opts).open(io, allocator, .{ .path = fork_path, .require_repo_root = true });
     defer fork_repo.deinit(io, allocator);
 
-    // clear the haxy state in the fork repo and create the patch branch
+    // clear the cpull state in the fork repo and create the patch branch
     {
         const DB = rp.Repo(.xit, repo_opts).DB;
         const State = rp.Repo(.xit, repo_opts).State;

@@ -21,7 +21,7 @@ fn commandHelp(command_kind: CommandKind) Help {
             \\a long-running server forwarding receive-pack and upload-pack.
             ,
             .example =
-            \\haxy serve --web-listen 127.0.0.1:8080 --ssh-listen 127.0.0.1:8022 --data-dir /srv/git
+            \\cpull serve --web-listen 127.0.0.1:8080 --ssh-listen 127.0.0.1:8022 --data-dir /srv/git
             \\use "none" for --ssh-listen to disable ssh. git clones over HTTP share the web UI's listener.
             \\--web-url and --ssh-url set the public urls shown to users, like https://example.com and ssh://example.com.
             \\--max-repo-size caps each repo's on-disk size, like 1G, rejecting pushes past it. no limit by default.
@@ -38,9 +38,9 @@ fn commandHelp(command_kind: CommandKind) Help {
             \\them merged and prints the commits to pin. show and list print json.
             ,
             .example =
-            \\haxy stack new --title "rename the api" core:feature app/web:feature
-            \\haxy stack merge 5f1c
-            \\haxy stack show 5f1c
+            \\cpull stack new --title "rename the api" core:feature app/web:feature
+            \\cpull stack merge 5f1c
+            \\cpull stack show 5f1c
             \\--workspace DIR names the workspace; by default, the one around the current dir.
             ,
         },
@@ -50,7 +50,7 @@ fn commandHelp(command_kind: CommandKind) Help {
             \\delete a user and everything they own, without their password.
             ,
             .example =
-            \\haxy delete-user alice --data-dir /srv/git
+            \\cpull delete-user alice --data-dir /srv/git
             \\safe to run while the server is up.
             ,
         },
@@ -86,9 +86,9 @@ pub fn printHelp(cmd_kind_maybe: ?CommandKind, writer: *std.Io.Writer) !void {
             try writer.print("{s}\n", .{line});
         }
     } else {
-        try writer.print("help: haxy <command> [<args>]\n\n", .{});
+        try writer.print("help: cpull <command> [<args>]\n\n", .{});
         try writer.print(
-            \\with no command, haxy opens the TUI (and a web UI on a local port) for the
+            \\with no command, cpull opens the TUI (and a web UI on a local port) for the
             \\repo or pull workspace around the current dir. local mode has no accounts:
             \\writes are authored by the repo's user.name and user.email.
             \\  --workspace DIR     view the pull workspace at DIR
@@ -234,7 +234,7 @@ pub const StackOptions = struct {
     labels: []const u8 = "",
 };
 
-// `haxy` with no command: local mode
+// `cpull` with no command: local mode
 pub const LocalOptions = struct {
     // the pull workspace to view instead of the repo around the current dir
     workspace_path: ?[]const u8 = null,

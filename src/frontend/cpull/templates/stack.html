@@ -6,7 +6,7 @@
 {{ ui.heading(page.title, page.ball) }}
 <p class="tool-meta">
   {{ hx.status(page.status, page.ball) }}
-  {% for l in page.labels %}<span class="badge rounded-pill text-bg-secondary haxy-label">{{ l }}</span> {% endfor %}
+  {% for l in page.labels %}<span class="badge rounded-pill text-bg-secondary cpull-label">{{ l }}</span> {% endfor %}
   {% if page.author %}by {{ page.author }}{% endif %}
 </p>
 {% if page.conflicted %}<div class="alert alert-secondary py-2">Conflicted after a sync: {{ page.conflicted }}. Any edit settles it.</div>{% endif %}

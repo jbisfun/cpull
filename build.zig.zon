@@ -1,5 +1,5 @@
 .{
-    .name = .haxy,
+    .name = .cpull,
     .version = "0.0.0",
     .dependencies = .{
         .xit = .{
@@ -22,5 +22,5 @@
         "build.zig.zon",
         "src",
     },
-    .fingerprint = 0x58fc9b81163a2f71,
+    .fingerprint = 0xacf9f97f2cae1d5d,
 }

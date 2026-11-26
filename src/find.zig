@@ -10,7 +10,7 @@ const fs = xit.fs;
 const progress = @import("./progress.zig");
 
 // the repo moment key holding one file map per branch tip. it sits outside the
-// haxy moment because pushes change it and events never do. each entry is
+// cpull moment because pushes change it and events never do. each entry is
 // keyed by its branch name's hash: its value is the branch's file map, and its
 // key slot holds the raw tip commit oid that map covers rather than the name.
 const index_key = "haxy/branch->file-name+path->oid";
