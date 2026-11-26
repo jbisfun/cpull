@@ -92,6 +92,7 @@ pub fn workspaceNav(aa: std.mem.Allocator, active: []const u8) ![]const theme.Li
         .{ .label = "Patches", .href = "/home/patches", .key = "patches" },
         .{ .label = "Stacks", .href = "/home/stacks", .key = "stacks" },
         .{ .label = "CI", .href = "/ci", .key = "ci" },
+        .{ .label = "Wiki", .href = "/wiki/", .key = "wiki" },
     };
     const out = try aa.alloc(theme.Link, items.len);
     for (items, out) |item, *link| link.* = .{ .label = item.label, .href = item.href, .active = std.mem.eql(u8, item.key, active) };

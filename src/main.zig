@@ -13,6 +13,10 @@ const evt = @import("./event.zig");
 // isn't mangled by raw mode and the alternate buffer
 pub const std_options_debug_io = xit.xitui.terminal.crash_debug_io;
 
+// the wiki's html rewriting (superhtml's tokenizer) logs every character at
+// debug level
+pub const std_options: std.Options = .{ .log_scope_levels = &.{.{ .scope = .@"html/tokenizer", .level = .info }} };
+
 // the web UI: the jbisfun wiki theme (src/frontend), unless built with
 // -Dfrontend=classic, which keeps cpull's own terminal-grid web UI
 pub const cpull_frontend: web.Frontend = if (@import("frontend_options").themed) @import("frontend/cpull/frontend.zig").frontend else .{};
@@ -195,7 +199,7 @@ pub fn run(
                 }
             };
 
-            var local: web.LocalHost = if (workspace) |w| .{ .workspace = &w.host, .workspace_name = w.name } else .{ .source = found };
+            var local: web.LocalHost = if (workspace) |w| .{ .workspace = &w.host, .workspace_name = w.name, .workspace_root = w.root } else .{ .source = found };
             // a workspace runs its CI too, under /ci
             var mounts: [1]web.Mount = undefined;
             if (workspace) |w| if (run_opts.environ) |environ| {
@@ -220,6 +224,7 @@ pub fn run(
             .delete_user => |options| try srv.deleteUser(io, allocator, cwd_path, options, run_opts.out, run_opts.err),
             .stack => |options| try ws.runStackCommand(io, allocator, cwd_path, options, run_opts.global_config_path, run_opts.out, run_opts.err),
             .report => |options| try @import("report/report.zig").run(io, allocator, cwd_path, options, run_opts.global_config_path, run_opts.out, run_opts.err),
+            .wiki => |options| try @import("wiki/wiki.zig").runCommand(io, allocator, cwd_path, options, run_opts.err),
         },
     }
 }
