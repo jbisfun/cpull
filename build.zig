@@ -251,6 +251,29 @@ fn addWiki(b: *std.Build, module: *std.Build.Module, vin_mod: *std.Build.Module,
         .flags = &.{"-std=c99"},
     });
     module.linkLibrary(lib);
+    // tree-sitter and the grammars highlight.zig embeds (parser + scanner,
+    // and queries/highlights.scm as an anonymous import for @embedFile)
+    const ts = b.dependency("tree_sitter", .{ .target = target, .optimize = optimize, .amalgamated = true });
+    module.linkLibrary(ts.artifact("tree-sitter"));
+    // (name, has an external scanner); a library each, for its own headers
+    inline for (.{ .{ "bash", true }, .{ "json", false }, .{ "rust", true }, .{ "python", true }, .{ "javascript", true }, .{ "yaml", true }, .{ "toml", true }, .{ "zig", false }, .{ "lua", true }, .{ "diff", false } }) |grammar| {
+        const name = grammar[0];
+        const dep = b.dependency("ts_" ++ name, .{});
+        const glib = b.addLibrary(.{
+            .linkage = .static,
+            .name = "tree-sitter-" ++ name,
+            .root_module = b.createModule(.{ .target = target, .optimize = optimize, .link_libc = true, .sanitize_c = .off }),
+        });
+        glib.root_module.addIncludePath(dep.path("src"));
+        glib.root_module.addCSourceFiles(.{
+            .root = dep.path("src"),
+            .files = if (grammar[1]) &.{ "parser.c", "scanner.c" } else &.{"parser.c"},
+            .flags = &.{"-std=c11"},
+        });
+        module.linkLibrary(glib);
+        module.addAnonymousImport("ts_" ++ name ++ "_highlights", .{ .root_source_file = dep.path("queries/highlights.scm") });
+    }
+    module.addImport("regex", b.dependency("regex", .{ .target = target, .optimize = optimize }).module("regex"));
     module.addImport("vin", vin_mod);
     module.addImport("toml", b.dependency("toml", .{ .target = target, .optimize = optimize }).module("toml"));
     module.addImport("superhtml", b.dependency("superhtml", .{ .target = target, .optimize = optimize }).module("superhtml"));

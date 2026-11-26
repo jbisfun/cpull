@@ -282,6 +282,7 @@ const Renderer = struct {
             while (i > 0 and i <= text.len and text[i - 1] == '`') i -= 1;
             sc = @intCast(i + 1);
         }
+        if (el != sl) ec += r.indent(el);
         if (r.line(el)) |text| {
             var i: usize = @intCast(@max(ec, 0));
             if (i < text.len and text[i] == ' ' and i + 1 < text.len and text[i + 1] == '`') i += 1;
@@ -297,11 +298,25 @@ const Renderer = struct {
         const sl = c.cmark_node_get_start_line(n);
         if (sl <= 0) return;
         var sc = c.cmark_node_get_start_column(n);
+        const el = c.cmark_node_get_end_line(n);
+        var ec = c.cmark_node_get_end_column(n);
+        if (el != sl) ec += r.indent(el);
         if (r.line(sl)) |text| {
+            var label: Out = .empty;
+            try r.collectText(n, &label);
             const i: usize = @intCast(@max(sc - 1, 0));
-            if (i < text.len and (text[i] == ' ' or text[i] == '\t')) sc += 1;
+            if (label.items.len > 0 and i + 1 < text.len and text[i] != '[' and text[i] != '<' and !std.mem.startsWith(u8, text[i..], label.items) and std.mem.startsWith(u8, text[i + 1 ..], label.items)) sc += 1;
         }
-        try r.print(" data-sourcepos=\"{d}:{d}-{d}:{d}\"", .{ sl, sc, c.cmark_node_get_end_line(n), c.cmark_node_get_end_column(n) });
+        try r.print(" data-sourcepos=\"{d}:{d}-{d}:{d}\"", .{ sl, sc, el, ec });
+    }
+
+    /// Leading whitespace of a line: cmark's columns on an inline's later
+    /// lines leave it out, comrak's count it.
+    fn indent(r: *Renderer, number: c_int) c_int {
+        const text = r.line(number) orelse return 0;
+        var i: usize = 0;
+        while (i < text.len and (text[i] == ' ' or text[i] == '\t')) i += 1;
+        return @intCast(i);
     }
 
     fn line(r: *Renderer, number: c_int) ?[]const u8 {
