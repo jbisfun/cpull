@@ -20,7 +20,7 @@ const order_key = "order";
 
 const repo_dir_name = ".xit";
 // a repo's sketch in its `.xit` dir, and an owner's in their user repo's
-const sketch_name = "haxy-fetchers";
+const sketch_name = "cpull-fetchers";
 
 // held across a fetch's sketch and index writes, so concurrent fetches can't
 // overwrite each other's sketch or write the index out of order

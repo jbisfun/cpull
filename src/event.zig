@@ -27,8 +27,57 @@ pub const Stack = @import("event/Stack.zig");
 // the most bytes an event's serialized form may hold
 pub const max_event_size: usize = 100 * 1024;
 
-// the branch haxy events are committed to before being consumed
-pub const events_ref: rf.Ref = .{ .kind = .head, .name = "haxy/events" };
+// the branch cpull events are committed to before being consumed
+pub const events_ref: rf.Ref = .{ .kind = .head, .name = "cpull/events" };
+
+// the events branch and local event db before the fork was renamed from
+// haxy to cpull; `adoptLegacy` takes them over once per repo
+pub const legacy_events_name = "haxy/events";
+pub const legacy_db_name = "haxy";
+
+// one-time migration of a git repo from haxy: with no cpull/events branch
+// (local or remote-tracking) but a haxy/events one, create the local
+// cpull/events at the same commit (preferring the local branch over a
+// remote's), so the next sync pushes it; the old branch is left alone. the
+// local event db (.git/haxy) moves to .git/cpull unless that exists.
+// returns whether the branch was adopted.
+pub fn adoptLegacy(
+    comptime repo_opts: rp.RepoOpts(.git),
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    repo: *rp.Repo(.git, repo_opts),
+) !bool {
+    const repo_dir = repo.core.repo_dir;
+    const DB = LocalEventDB(repo_opts.hash);
+    if (repo_dir.access(io, DB.db_name, .{})) |_| {} else |_| {
+        repo_dir.rename(legacy_db_name, repo_dir, DB.db_name, io) catch {};
+    }
+
+    if (null != try repo.readRef(io, events_ref)) return false;
+    var remotes = try repo.listRemotes(io, allocator);
+    defer remotes.deinit();
+    for (remotes.sections.keys()) |remote_name| {
+        if (null != try repo.readRef(io, .{ .kind = .{ .remote = remote_name }, .name = events_ref.name })) return false;
+    }
+
+    const legacy_oid = (try repo.readRef(io, .{ .kind = .head, .name = legacy_events_name })) orelse blk: {
+        for (remotes.sections.keys()) |remote_name| {
+            if (try repo.readRef(io, .{ .kind = .{ .remote = remote_name }, .name = legacy_events_name })) |oid| break :blk oid;
+        }
+        return false;
+    };
+    const state: rp.Repo(.git, repo_opts).State(.read_write) = .{ .core = &repo.core, .extra = .{} };
+    var ref_path_buffer: [rf.MAX_REF_CONTENT_SIZE]u8 = undefined;
+    try rf.write(.git, repo_opts, state, io, try events_ref.toPath(&ref_path_buffer), .{ .oid = &legacy_oid });
+    return true;
+}
+
+// `adoptLegacy` on the git repo at `path`; errors (no repo, a xit repo) are ignored
+pub fn adoptLegacyAt(io: std.Io, allocator: std.mem.Allocator, path: []const u8) void {
+    var repo = rp.Repo(.git, .{}).open(io, allocator, .{ .path = path }) catch return;
+    defer repo.deinit(io, allocator);
+    _ = adoptLegacy(.{}, io, allocator, &repo) catch {};
+}
 
 pub const history_key = "haxy/history";
 pub const last_object_id_key = "haxy/last-object-id";
@@ -53,12 +102,12 @@ pub fn initAdminRepo(io: std.Io, allocator: std.mem.Allocator, path: []const u8)
     {
         const file = try repo.core.work_dir.createFile(io, admin_about_path, .{});
         defer file.close(io);
-        try file.writeStreamingAll(io, "# HAXY\n\nWelcome to your Haxy instance!\n\nEdit `admin/ABOUT.md` in the server dir to change what this page says.");
+        try file.writeStreamingAll(io, "# cpull\n\nWelcome to your cpull instance!\n\nEdit `admin/ABOUT.md` in the server dir to change what this page says.");
     }
     try repo.add(io, allocator, &.{admin_about_path});
-    const init_oid_hex = try repo.commit(io, allocator, .{ .author = "haxy <haxy@localhost>", .message = "init" });
+    const init_oid_hex = try repo.commit(io, allocator, .{ .author = "cpull <cpull@localhost>", .message = "init" });
 
-    // an empty haxy state on the init commit, so pages render before the first
+    // an empty cpull state on the init commit, so pages render before the first
     // event. that event's root commit is unrelated to init, so consume treats
     // it as rebased to the beginning and discards this state.
     {
@@ -650,13 +699,13 @@ pub fn remove(
     }});
 }
 
-pub const undo_action = "haxy/events";
+pub const undo_action = "haxy/events"; // stored in undo history: kept from haxy
 pub const merge_undo_action = "haxy/merge-events";
 
-// index that tracks the events consumed in a given haxy moment
+// index that tracks the events consumed in a given cpull moment
 pub const moment_index_to_event_id_set_key = "moment-index->event-id-set";
 
-// a haxy moment's own position in the haxy history
+// a cpull moment's own position in the cpull history
 pub const moment_index_key = "moment-index";
 
 // a moment's key in the set map
@@ -1054,7 +1103,7 @@ pub fn LocalEventDB(comptime hash_kind: hash.HashKind) type {
         buffer: *std.Io.Writer.Allocating,
         db: *EventDB(hash_kind),
 
-        const db_name = "haxy";
+        pub const db_name = "cpull";
         const Self = @This();
 
         // open the db in `repo_dir` for writing, creating it if it doesn't exist
@@ -1233,15 +1282,15 @@ fn consumeWithScratch(
         if (std.mem.eql(u8, last_object_id, &tip)) return error.CancelTransaction;
     }
 
-    // the list with all of haxy's state, including materialized views.
-    // the reason it is a list is so we can keep every previous haxy
+    // the list with all of cpull's state, including materialized views.
+    // the reason it is a list is so we can keep every previous cpull
     // state, making it easy to revert to an older state if the user
     // rebases some of the past commits.
     const haxy_history_cursor = try moment.putCursor(hash.hashInt(repo_opts.hash, history_key));
     const haxy_history = try DB.ArrayList(.read_write).init(haxy_history_cursor);
 
-    // add a new item to the haxy history list created above.
-    // we call the item haxy_moments. it is a map of object id to haxy moment.
+    // add a new item to the cpull history list created above.
+    // we call the item haxy_moments. it is a map of object id to cpull moment.
     // in other words, it maps each object id to a hash map containing the
     // state that the database was in when that object id was consumed.
     var haxy_moments_cursor = try haxy_history.appendCursor();
@@ -1276,9 +1325,9 @@ fn consumeWithScratch(
     }
 
     // if this branch was rebased and force pushed, we need to detect that and
-    // properly revert the haxy state to the last valid state. we detect this
+    // properly revert the cpull state to the last valid state. we detect this
     // by simply asking if the last event is a descendent of the last event
-    // we consumed. if it isn't, then we know the haxy state needs to be reverted.
+    // we consumed. if it isn't, then we know the cpull state needs to be reverted.
     if (last_object_id_maybe) |*last_object_id| {
         var is_rebased = false;
         const newest_object_id = commit_iter.newest_object_id orelse return error.OidNotFound;
@@ -1306,7 +1355,7 @@ fn consumeWithScratch(
                 0 => {
                     // the branch was rebased all the way to the very beginning.
                     // we have a repo event with no parent, which means it is now
-                    // the very first event. all we need to do is set the haxy
+                    // the very first event. all we need to do is set the cpull
                     // history list to be empty and make a new haxy_moments map
                     // to work with. a new admin repo's first event lands here
                     // too, discarding the empty state initAdminRepo wrote.
@@ -1327,11 +1376,11 @@ fn consumeWithScratch(
                     const old_moment_index_cursor = try old_moment.getCursor(hash.hashInt(repo_opts.hash, moment_index_key)) orelse return error.CursorNotFound;
                     const old_moment_index = try old_moment_index_cursor.readUint();
 
-                    // resize the haxy history list so we truncate all the
+                    // resize the cpull history list so we truncate all the
                     // moments that were created after the parent_oid was consumed
                     try haxy_history.slice(old_moment_index + 1);
 
-                    // make a new haxy moment and set its initial value to the last haxy moment
+                    // make a new cpull moment and set its initial value to the last cpull moment
                     haxy_moments_cursor = try haxy_history.appendCursor();
                     const old_haxy_moments_cursor = try haxy_history.getCursor(old_moment_index) orelse return error.CursorNotFound;
                     try haxy_moments_cursor.write(.{ .slot = try old_haxy_moments_cursor.slot() });
@@ -1355,7 +1404,7 @@ fn consumeWithScratch(
         // create a moment for this object id
         var haxy_moment_cursor = try haxy_moments.putCursor(hash.bytesToInt(repo_opts.hash, &repo_event_oid));
 
-        // if there was a previous object id, set this haxy moment's initial value to it.
+        // if there was a previous object id, set this cpull moment's initial value to it.
         // this efficiently "clones" the map so we make further modifications based on it.
         if (parent_oids.len > 0) {
             var first_parent_oid: [hash.byteLen(repo_opts.hash)]u8 = undefined;
@@ -1363,7 +1412,7 @@ fn consumeWithScratch(
 
             const first_parent_haxy_moment_cursor = try haxy_moments.getCursor(hash.bytesToInt(repo_opts.hash, &first_parent_oid)) orelse return error.CursorNotFound;
             try haxy_moment_cursor.write(.{ .slot = try first_parent_haxy_moment_cursor.slot() });
-            // freeze so changes copy the parent's haxy moment instead of mutating it
+            // freeze so changes copy the parent's cpull moment instead of mutating it
             try haxy_moment_cursor.freeze();
         }
 
@@ -1417,7 +1466,7 @@ fn consumeWithScratch(
         }
 
         // associate this moment with the index it will first appear at in the
-        // haxy history list. this will be important later so we can truncate
+        // cpull history list. this will be important later so we can truncate
         // that list if the user ever rebases starting at this object id.
         const moment_index = try haxy_history.count() - 1;
         try haxy_moment.put(hash.hashInt(repo_opts.hash, moment_index_key), .{ .uint = moment_index });
@@ -3088,7 +3137,7 @@ pub fn CommitIterator(comptime repo_kind: rp.RepoKind, comptime repo_opts: rp.Re
         const DB = EventDB(repo_opts.hash);
         // the scratch db (see consumeInTransaction)
         const TempDB = xit.xitdb.Database(.buffered_file, hash.HashInt(repo_opts.hash));
-        const db_name = "haxy-repo-events.db";
+        const db_name = "cpull-repo-events.db";
 
         // map of each object id to its children
         parent_to_children: TempDB.HashMap(.read_write),

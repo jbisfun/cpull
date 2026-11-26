@@ -16,13 +16,13 @@ const wgt = xitui.widget;
 const Focus = xitui.focus.Focus;
 const Grid = xitui.grid.Grid;
 
-const cookie_name = "haxy_session";
+const cookie_name = "cpull_session";
 // the session cookie a login or a claimed auto-login sets; both must scope
 // it the same way. lax so links from other sites arrive logged in, and a
 // max-age (chrome's 400 day cap) so it outlives the browser.
 const session_cookie_fmt = cookie_name ++ "={s}; Path=/; HttpOnly; SameSite=Lax; Max-Age=34560000";
-const form_flash_cookie = "haxy_form_flash";
-const local_flash_cookie = "haxy_local_flash";
+const form_flash_cookie = "cpull_form_flash";
+const local_flash_cookie = "cpull_local_flash";
 const local_required_title_prefix = "required_title:";
 const local_sync_failure_prefix = "sync:";
 const local_workspace_prefix = "workspace:";
@@ -34,26 +34,26 @@ pub const Embed = struct {
     body: []const u8,
 };
 
-// what a program built on haxy as a library swaps in for haxy's own web UI,
-// by declaring it as `pub const haxy_frontend` in its root file
+// what a program built on cpull as a library swaps in for cpull's own web UI,
+// by declaring it as `pub const cpull_frontend` in its root file
 pub const Frontend = struct {
-    // served ahead of haxy's own files, so one with the same path replaces it.
+    // served ahead of cpull's own files, so one with the same path replaces it.
     // "index.html" is the page template.
     files: []const Embed = &.{},
-    // writes the html for the template's HAXY_HTML token in place of haxy's
+    // writes the html for the template's CPULL_HTML token in place of cpull's
     renderHtml: ?fn (allocator: std.mem.Allocator, page: *const ui.Page, session: *const ui.Session.Data, writer: *std.Io.Writer) anyerror!void = null,
-    // starts the title written for the template's HAXY_TITLE token
-    site_name: []const u8 = "HAXY",
+    // starts the title written for the template's CPULL_TITLE token
+    site_name: []const u8 = "cpull",
 };
 
-const frontend: Frontend = if (@hasDecl(@import("root"), "haxy_frontend")) @import("root").haxy_frontend else .{};
+const frontend: Frontend = if (@hasDecl(@import("root"), "cpull_frontend")) @import("root").cpull_frontend else .{};
 
 const embeds = [_]Embed{
     .{ .path = "index.html", .content_type = "text/html; charset=utf-8", .body = @embedFile("embed/index.html") },
     .{ .path = "script.js", .content_type = "text/javascript; charset=utf-8", .body = @embedFile("embed/script.js") },
     .{ .path = "HaxyMono-Core.woff2", .content_type = "font/woff2", .body = @embedFile("embed/HaxyMono-Core.woff2") },
     .{ .path = "HaxyMono-Full.woff2", .content_type = "font/woff2", .body = @embedFile("embed/HaxyMono-Full.woff2") },
-    .{ .path = "haxy.wasm", .content_type = "application/wasm", .body = @embedFile("haxy.wasm") },
+    .{ .path = "cpull.wasm", .content_type = "application/wasm", .body = @embedFile("cpull.wasm") },
 };
 
 // a feature serving its own urls under `prefix` in local mode (cpull's CI
@@ -351,7 +351,7 @@ fn handleRequest(
         const wants_json = if (getHeader(request, "accept")) |accept| std.mem.indexOf(u8, accept, "application/json") != null else false;
         // a path that's neither a page nor an embed gets the not-found page
         const current_page = routeFromUrl(host, path) orelse .not_found;
-        // resolve the haxy_session cookie's token to a user_id via the
+        // resolve the cpull_session cookie's token to a user_id via the
         // store. user_id_buf lives on the stack for the rest of handleRequest,
         // which is plenty for renderPage to consume. local mode has no
         // accounts, so it is always logged out.
@@ -725,7 +725,7 @@ fn respondLoginRequired(request: *std.http.Server.Request) !void {
 // refuse a write to a pull workspace's repo whose config doesn't name pull's
 // identity. the body goes unread, so the connection closes.
 fn respondNoPullIdentity(request: *std.http.Server.Request) !void {
-    try request.respond("this repo has no user.name and user.email in its git config to write as: start haxy with `pull haxy open`, which sets them to pull's identity", .{
+    try request.respond("this repo has no user.name and user.email in its git config to write as: start cpull with `pull cpull open`, which sets them to pull's identity", .{
         .status = .forbidden,
         .keep_alive = false,
         .extra_headers = &.{.{ .name = "content-type", .value = "text/plain" }},
@@ -2675,14 +2675,14 @@ fn renderPage(
     // '<' appears solely inside string values, so escaping every '<' (and '>'
     // for good measure) to its \uXXXX form yields equivalent json that can't
     // break out of the tag. a frontend's template may leave it out.
-    const json_token = "{{{ HAXY_JSON }}}";
+    const json_token = "{{{ CPULL_JSON }}}";
     var json: std.Io.Writer.Allocating = .init(allocator);
     defer json.deinit();
     if (json_only or std.mem.indexOf(u8, template, json_token) != null) try std.json.Stringify.value(snapshot, .{}, &json.writer);
     if (json_only) return try json.toOwnedSlice();
 
     // a frontend's template may leave out the html
-    const html_token = "{{{ HAXY_HTML }}}";
+    const html_token = "{{{ CPULL_HTML }}}";
     const content = if (std.mem.indexOf(u8, template, html_token) == null)
         ""
     else if (frontend.renderHtml) |render| blk: {
@@ -2693,7 +2693,7 @@ fn renderPage(
     } else try generateHtml(allocator, &root, &session);
     defer allocator.free(content);
 
-    const title_token = "{{{ HAXY_TITLE }}}";
+    const title_token = "{{{ CPULL_TITLE }}}";
     var title: std.ArrayList(u8) = .empty;
     defer title.deinit(allocator);
     try appendTitle(allocator, &title, &snapshot.page);
@@ -3021,7 +3021,7 @@ fn renderPanel(allocator: std.mem.Allocator, output: *std.ArrayList(u8), focus: 
 }
 
 const form_prefix = "form:";
-const form_id_prefix = "haxy-form-";
+const form_id_prefix = "cpull-form-";
 
 fn formAction(focus: *const Focus) ?[]const u8 {
     return switch (focus.kind) {

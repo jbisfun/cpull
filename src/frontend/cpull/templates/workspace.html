@@ -53,7 +53,7 @@
       <td>{{ s.status }}</td>
     </tr>
   {% else %}
-    <tr><td colspan="4" class="text-body-secondary">No stacks yet. <code>pull haxy patch</code> turns work across repos into one.</td></tr>
+    <tr><td colspan="4" class="text-body-secondary">No stacks yet. <code>pull cpull patch</code> turns work across repos into one.</td></tr>
   {% endfor %}
   </tbody>
 </table>
@@ -66,7 +66,7 @@
       <td class="text-center">{{ ui.ball(r.ball, "", r.status or "open") }}</td>
       <td>{% if r.first_of_repo %}<a href="{{ r.repo_href }}">{{ r.repo }}</a>{% endif %}</td>
       <td><a class="fw-semibold" href="{{ r.href }}">{{ r.title }}</a></td>
-      <td>{% if page.view == "issues" %}{% for l in r.labels %}<span class="badge rounded-pill text-bg-secondary haxy-label">{{ l }}</span> {% endfor %}{% else %}<code>{{ r.detail }}</code>{% endif %}</td>
+      <td>{% if page.view == "issues" %}{% for l in r.labels %}<span class="badge rounded-pill text-bg-secondary cpull-label">{{ l }}</span> {% endfor %}{% else %}<code>{{ r.detail }}</code>{% endif %}</td>
     </tr>
   {% else %}
     <tr><td colspan="4" class="text-body-secondary">No open {{ page.view }} in any repo.</td></tr>

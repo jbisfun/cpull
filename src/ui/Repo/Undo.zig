@@ -115,7 +115,7 @@ const Detail = struct {
     buttons: []const DetailButton = &.{},
 };
 
-// every haxy event transaction shares one action, and the events it wrote are
+// every cpull event transaction shares one action, and the events it wrote are
 // named by the moment's index rather than by the record
 fn eventDetail(
     comptime opts: rp.RepoOpts(.xit),
@@ -166,7 +166,7 @@ fn eventDetail(
     };
 }
 
-// xit formats the transactions haxy has no name of its own for
+// xit formats the transactions cpull has no name of its own for
 fn formatRecord(comptime opts: rp.RepoOpts(.xit), arena: *std.heap.ArenaAllocator, core: *rp.Repo(.xit, opts).Core, record: ?xit.undo.Record) ![]const u8 {
     const value = record orelse return "no undo record";
     var description: std.Io.Writer.Allocating = .init(arena.allocator());
@@ -313,7 +313,7 @@ fn undoneFrom(arena: *std.heap.ArenaAllocator, record: ?xit.undo.Record) !?u64 {
     return parsed.value.index;
 }
 
-// the moment's own position in the haxy history
+// the moment's own position in the cpull history
 fn momentIndex(comptime opts: rp.RepoOpts(.xit), haxy_moment: evt.EventDB(opts.hash).HashMap(.read_only)) !?u64 {
     const cursor = try haxy_moment.getCursor(hash.hashInt(opts.hash, evt.moment_index_key)) orelse return null;
     return try cursor.readUint();

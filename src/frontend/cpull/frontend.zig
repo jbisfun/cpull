@@ -1,11 +1,11 @@
-// haxy's themed web frontend: every page server-rendered in the jbisfun wiki
-// theme with idlci's Jenkins layout, through haxy's `Frontend` hook
-// (web.zig). The page data comes from haxy's snapshot (ui.Page and
+// cpull's themed web frontend: every page server-rendered in the jbisfun wiki
+// theme with idlci's Jenkins layout, through cpull's `Frontend` hook
+// (web.zig). The page data comes from cpull's snapshot (ui.Page and
 // ui.Session.Data); the views in this dir turn it into template data, and the
 // templates in templates/ extend theme/layout.html. Forms post to the same
-// urls web.zig handles for haxy's own UI, so writes work without the wasm
-// client. src/main.zig declares `haxy_frontend` from here; build with
-// `-Dfrontend=classic` to get haxy's own terminal-grid web UI back.
+// urls web.zig handles for cpull's own UI, so writes work without the wasm
+// client. src/main.zig declares `cpull_frontend` from here; build with
+// `-Dfrontend=classic` to get cpull's own terminal-grid web UI back.
 const std = @import("std");
 const ui = @import("../../ui.zig");
 const web = @import("../../web.zig");
@@ -15,7 +15,7 @@ const workspace_views = @import("views/workspace.zig");
 const repo_views = @import("views/repo.zig");
 const site_views = @import("views/site.zig");
 
-pub const site_name = "haxy";
+pub const site_name = "cpull";
 
 pub const frontend: web.Frontend = .{
     .files = &files,
@@ -23,12 +23,12 @@ pub const frontend: web.Frontend = .{
     .site_name = site_name,
 };
 
-// the theme's assets plus haxy's own stylesheet; index.html leaves the whole
+// the theme's assets plus cpull's own stylesheet; index.html leaves the whole
 // document to renderHtml, which writes the theme layout
 const files = blk: {
     var list: [theme.assets.len + 2]web.Embed = undefined;
-    list[0] = .{ .path = "index.html", .content_type = "text/html; charset=utf-8", .body = "{{{ HAXY_HTML }}}" };
-    list[1] = .{ .path = "assets/haxy.css", .content_type = "text/css; charset=utf-8", .body = @embedFile("haxy.css") };
+    list[0] = .{ .path = "index.html", .content_type = "text/html; charset=utf-8", .body = "{{{ CPULL_HTML }}}" };
+    list[1] = .{ .path = "assets/cpull.css", .content_type = "text/css; charset=utf-8", .body = @embedFile("cpull.css") };
     for (theme.assets, 2..) |asset, i| list[i] = .{ .path = asset.path, .content_type = asset.content_type, .body = asset.body };
     break :blk list;
 };
@@ -51,7 +51,7 @@ pub const templates = [_]theme.Template{
     .{ .name = "user.html", .source = @embedFile("templates/user.html") },
 };
 
-// haxy's renderHtml hook: the whole document for one page
+// cpull's renderHtml hook: the whole document for one page
 pub fn render(allocator: std.mem.Allocator, page: *const ui.Page, session: *const ui.Session.Data, writer: *std.Io.Writer) anyerror!void {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
@@ -124,7 +124,7 @@ fn buildLayout(c: Ctx, chrome: Chrome) !theme.Layout {
         },
     }
     try crumbs.appendSlice(aa, chrome.crumbs);
-    try footer.append(aa, .{ .label = "haxy" });
+    try footer.append(aa, .{ .label = "cpull" });
     try footer.append(aa, .{ .label = if (c.server()) "server" else "local mode" });
 
     if (c.session.workspace_flash) |text| try flashes.append(aa, .{ .text = text });
@@ -141,6 +141,6 @@ fn buildLayout(c: Ctx, chrome: Chrome) !theme.Layout {
         .groups = chrome.groups,
         .flashes = flashes.items,
         .footer = footer.items,
-        .stylesheets = &.{"/assets/haxy.css"},
+        .stylesheets = &.{"/assets/cpull.css"},
     };
 }

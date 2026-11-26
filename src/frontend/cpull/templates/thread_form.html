@@ -6,7 +6,7 @@
 {{ ui.heading(page.heading, "", "trash" if page.confirm else "pencil-square") }}
 {% if page.subtitle %}<p class="tool-meta">{{ page.subtitle }}</p>{% endif %}
 {% if page.quoted %}
-<div class="card haxy-comment mb-3"><div class="card-header small fw-semibold">{{ hx.person(page.quoted.author) }} · {{ ui.time(page.quoted.time) }}</div><div class="card-body">{{ page.quoted.body }}</div></div>
+<div class="card cpull-comment mb-3"><div class="card-header small fw-semibold">{{ hx.person(page.quoted.author) }} · {{ ui.time(page.quoted.time) }}</div><div class="card-body">{{ page.quoted.body }}</div></div>
 {% endif %}
 {% if page.error_text %}<div class="alert alert-danger py-2" role="alert">{{ page.error_text }}</div>{% endif %}
 <form method="post" action="{{ page.action }}" style="max-width: 48rem">

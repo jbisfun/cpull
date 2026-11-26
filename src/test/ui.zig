@@ -341,7 +341,7 @@ test "sync creates missing event branches and preserves head" {
         var local = try Repo.init(io, allocator, .{ .path = local_path });
         defer local.deinit(io, allocator);
         try local.addConfig(io, allocator, .{ .name = "user.name", .value = "user" });
-        try local.addConfig(io, allocator, .{ .name = "user.email", .value = "user@haxy" });
+        try local.addConfig(io, allocator, .{ .name = "user.email", .value = "user@cpull" });
         {
             const file = try local.core.work_dir.createFile(io, "keep.txt", .{});
             defer file.close(io);
@@ -354,7 +354,7 @@ test "sync creates missing event branches and preserves head" {
         const id: [evt.event_id_size]u8 = @splat(1);
         try evt.consume(.local, .repo, .git, .{}, io, allocator, &local, evt.events_ref, &.{.{
             .id = std.fmt.bytesToHex(id, .lower),
-            .author = .{ .name = "haxy", .email = "user@haxy" },
+            .author = .{ .name = "cpull", .email = "user@cpull" },
             .event = .{ .issue = .{ .title = "sync", .description = "", .labels = "" } },
         }});
     }
@@ -366,7 +366,7 @@ test "sync creates missing event branches and preserves head" {
         const id: [evt.event_id_size]u8 = @splat(2);
         try evt.consume(.local, .repo, .git, .{}, io, allocator, &local, evt.events_ref, &.{.{
             .id = std.fmt.bytesToHex(id, .lower),
-            .author = .{ .name = "haxy", .email = "user@haxy" },
+            .author = .{ .name = "cpull", .email = "user@cpull" },
             .event = .{ .issue = .{ .title = "local", .description = "", .labels = "" } },
         }});
     }
@@ -376,7 +376,7 @@ test "sync creates missing event branches and preserves head" {
         const id: [evt.event_id_size]u8 = @splat(3);
         try evt.consume(.local, .repo, .git, .{}, io, allocator, &remote, evt.events_ref, &.{.{
             .id = std.fmt.bytesToHex(id, .lower),
-            .author = .{ .name = "haxy", .email = "user@haxy" },
+            .author = .{ .name = "cpull", .email = "user@cpull" },
             .event = .{ .issue = .{ .title = "remote", .description = "", .labels = "" } },
         }});
     }

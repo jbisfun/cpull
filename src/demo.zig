@@ -299,7 +299,7 @@ pub fn main(init: std.process.Init) !void {
             defer template_repo.deinit(io, allocator);
 
             try template_repo.setMergeAlgorithm(io, allocator, .patch);
-            try template_repo.addConfig(io, allocator, .{ .name = "user.name", .value = "haxy" });
+            try template_repo.addConfig(io, allocator, .{ .name = "user.name", .value = "cpull" });
             try template_repo.addConfig(io, allocator, .{ .name = "user.email", .value = "admin@example.test" });
 
             // a README plus a nested doc so the file tree has a directory to
@@ -1286,7 +1286,7 @@ fn seedPatches(
         },
         .{
             .title = "Edit an adjacent line in alpha.txt",
-            .description = "This patch can be cleanly merged by haxy, while git throws a **merge conflict**!",
+            .description = "This patch can be cleanly merged by cpull, while git throws a **merge conflict**!",
             .labels = "merge",
             .status = .open,
             .alpha_edit = .{ .line = 2, .text = "adjust alpha beside the latest scatter edit" },
@@ -1553,7 +1553,7 @@ fn seedPush(io: std.Io, allocator: std.mem.Allocator, repo: *rp.Repo(.xit, .{}),
 // commit `events` onto `ref`, rooted at `parent`, as one transaction.
 // consume always roots a new branch at nothing, so the divergent fixtures
 // write their side branch here instead. nothing is consumed, so it records
-// xit's own commit action rather than one of haxy's event actions
+// xit's own commit action rather than one of cpull's event actions
 fn commitEventsAtRef(
     io: std.Io,
     allocator: std.mem.Allocator,

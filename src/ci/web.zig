@@ -7,7 +7,7 @@ const fmt = @import("fmt.zig");
 const projects = @import("projects.zig");
 const app_mod = @import("app.zig");
 const theme = @import("../frontend/theme/theme.zig");
-const frontend = @import("../frontend/haxy/frontend.zig");
+const frontend = @import("../frontend/cpull/frontend.zig");
 
 const App = app_mod.App;
 const Allocator = std.mem.Allocator;

@@ -1,4 +1,4 @@
-//! In-process SSH server: full server side of SSH-2 for haxy's use case.
+//! In-process SSH server: full server side of SSH-2 for cpull's use case.
 //!
 //! handles, per connection: version exchange, KEXINIT, curve25519 key
 //! exchange (optionally hybrid with mlkem768), NEWKEYS, key derivation,
@@ -10,7 +10,7 @@
 //! flow with sender/receiver windows, and clean teardown
 //! (exit-status / EOF / CLOSE).
 //!
-//! public surface for haxy code:
+//! public surface for cpull code:
 //!   handleConnection — call from the listener with a session handler.
 //!   SessionCtx       — handed to the handler; carries the channel + ciphers,
 //!                      the verified key's fingerprint, and an event /
@@ -42,7 +42,7 @@ const ecdsa = std.crypto.sign.ecdsa;
 const ChaCha20 = std.crypto.stream.chacha.ChaCha20With64BitNonce;
 const Poly1305 = std.crypto.onetimeauth.Poly1305;
 
-pub const server_version = "SSH-2.0-haxy_0.0";
+pub const server_version = "SSH-2.0-cpull_0.0";
 pub const host_key_file_name = "ssh_host_ed25519_key";
 const max_host_key_file_len = 4096;
 
@@ -185,7 +185,7 @@ pub const HostKey = struct {
         try writeStringField(&private, allocator, "ssh-ed25519");
         try writeStringField(&private, allocator, &self.keypair.public_key.bytes);
         try writeStringField(&private, allocator, &self.keypair.secret_key.bytes);
-        try writeStringField(&private, allocator, "haxy"); // comment
+        try writeStringField(&private, allocator, "cpull"); // comment
         // padded with 1, 2, 3 and so on to the cipher's block size, 8 for none
         var pad: u8 = 1;
         while (private.items.len % 8 != 0) : (pad += 1) try private.append(allocator, pad);

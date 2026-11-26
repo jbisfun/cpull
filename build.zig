@@ -6,7 +6,7 @@ pub fn build(b: *std.Build) void {
     const ansi_art = ansiArtModule(b);
     const test_filters = b.option([]const []const u8, "test-filter", "Skip tests that do not match any filter") orelse &[0][]const u8{};
     // the web UI: "wiki" (src/frontend, the jbisfun wiki theme) or "classic"
-    // (haxy's own terminal-grid web UI with the wasm client)
+    // (cpull's own terminal-grid web UI with the wasm client)
     const frontend = b.option(enum { wiki, classic }, "frontend", "Web UI to build: wiki (default) or classic") orelse .wiki;
     const vin_mod = b.dependency("vin", .{}).module("zig-vin");
 
@@ -18,7 +18,7 @@ pub fn build(b: *std.Build) void {
         });
 
         const exe = b.addExecutable(.{
-            .name = "haxy",
+            .name = "cpull",
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/main_wasm.zig"),
                 .target = wasm_target,
@@ -64,7 +64,7 @@ pub fn build(b: *std.Build) void {
     // main
     {
         const exe = b.addExecutable(.{
-            .name = "haxy",
+            .name = "cpull",
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/main.zig"),
                 .target = target,
@@ -76,7 +76,7 @@ pub fn build(b: *std.Build) void {
         exe.root_module.addImport("xit", xit_dep.module("xit"));
         exe.root_module.addImport("xml", xml_mod);
         exe.root_module.addImport("ansi_art", ansi_art);
-        exe.root_module.addAnonymousImport("haxy.wasm", .{
+        exe.root_module.addAnonymousImport("cpull.wasm", .{
             .root_source_file = wasm_exe.getEmittedBin(),
         });
         addFrontend(b, exe.root_module, vin_mod, frontend == .wiki);
@@ -117,7 +117,7 @@ pub fn build(b: *std.Build) void {
         theme_tests.root_module.addImport("vin", vin_mod);
         test_step.dependOn(&b.addRunArtifact(theme_tests).step);
 
-        // the CI (src/ci), with the haxy frontend it renders beside
+        // the CI (src/ci), with the cpull frontend it renders beside
         const ci_tests = b.addTest(.{
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/test_ci.zig"),
@@ -136,17 +136,17 @@ pub fn build(b: *std.Build) void {
         test_step.dependOn(&run_ci_tests.step);
     }
 
-    // module for using haxy as a library
-    // (the commands below consume haxy this way)
-    const haxy = b.addModule("haxy", .{
+    // module for using cpull as a library
+    // (the commands below consume cpull this way)
+    const cpull = b.addModule("cpull", .{
         .root_source_file = b.path("src/lib.zig"),
     });
-    haxy.addImport("xit", xit_dep.module("xit"));
-    haxy.addImport("xml", xml_mod);
-    haxy.addImport("ansi_art", ansi_art);
-    haxy.addImport("sqlite", sqlite_mod);
-    haxy.addImport("vin", vin_mod);
-    haxy.addAnonymousImport("haxy.wasm", .{
+    cpull.addImport("xit", xit_dep.module("xit"));
+    cpull.addImport("xml", xml_mod);
+    cpull.addImport("ansi_art", ansi_art);
+    cpull.addImport("sqlite", sqlite_mod);
+    cpull.addImport("vin", vin_mod);
+    cpull.addAnonymousImport("cpull.wasm", .{
         .root_source_file = wasm_exe.getEmittedBin(),
     });
 
@@ -160,7 +160,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             }),
         });
-        exe.root_module.addImport("haxy", haxy);
+        exe.root_module.addImport("cpull", cpull);
         const try_install = b.addInstallArtifact(exe, .{});
 
         const run_cmd = b.addRunArtifact(exe);
@@ -174,7 +174,7 @@ pub fn build(b: *std.Build) void {
     // testnet
     {
         const server_exe = b.addExecutable(.{
-            .name = "haxy",
+            .name = "cpull",
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/main.zig"),
                 .target = target,
@@ -185,10 +185,10 @@ pub fn build(b: *std.Build) void {
         server_exe.root_module.addImport("xit", xit_dep.module("xit"));
         server_exe.root_module.addImport("xml", xml_mod);
         server_exe.root_module.addImport("ansi_art", ansi_art);
-        server_exe.root_module.addAnonymousImport("haxy.wasm", .{
+        server_exe.root_module.addAnonymousImport("cpull.wasm", .{
             .root_source_file = wasm_exe.getEmittedBin(),
         });
-        // the network tests read haxy's own web UI
+        // the network tests read cpull's own web UI
         addFrontend(b, server_exe.root_module, vin_mod, false);
         server_exe.root_module.addImport("sqlite", sqlite_mod);
         const install_server_exe = b.addInstallArtifact(server_exe, .{});
@@ -201,7 +201,7 @@ pub fn build(b: *std.Build) void {
             }),
             .filters = test_filters,
         });
-        unit_tests.root_module.addImport("haxy", haxy);
+        unit_tests.root_module.addImport("cpull", cpull);
 
         const run_unit_tests = b.addRunArtifact(unit_tests);
         run_unit_tests.has_side_effects = true;
@@ -211,7 +211,7 @@ pub fn build(b: *std.Build) void {
     }
 }
 
-// the imports src/main.zig's haxy_frontend needs: whether the wiki theme is
+// the imports src/main.zig's cpull_frontend needs: whether the wiki theme is
 // built in, and the template engine it renders with
 fn addFrontend(b: *std.Build, module: *std.Build.Module, vin_mod: *std.Build.Module, themed: bool) void {
     const options = b.addOptions();
