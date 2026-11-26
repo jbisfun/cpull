@@ -274,7 +274,7 @@ pub fn refreshBranchesInTransaction(
     for (patches.keys(), patches.values()) |id, record| {
         defer progress.report(repo_opts, io, progress_ctx_maybe, .{ .complete_one = .writing_patch });
 
-        const author = evt.CommitAuthor{ .name = "haxy", .email = record.author_email orelse "user@haxy" };
+        const author = evt.CommitAuthor{ .name = "cpull", .email = record.author_email orelse "user@cpull" };
         writeBranchPatchInTransaction(host, repo_opts, state, moment, io, &arena, std.fmt.bytesToHex(id, .lower), record.event, record.event, author, first_parent) catch |err| {
             std.log.warn("failed to refresh branch patch: {s}", .{@errorName(err)});
             continue;
@@ -365,7 +365,7 @@ pub fn refreshBranches(
     }
 
     for (patches.keys(), patches.values()) |id, record| {
-        const author = evt.CommitAuthor{ .name = "haxy", .email = record.author_email orelse "user@haxy" };
+        const author = evt.CommitAuthor{ .name = "cpull", .email = record.author_email orelse "user@cpull" };
         writeBranchPatch(host, repo_kind, repo_opts, io, allocator, repo, std.fmt.bytesToHex(id, .lower), record.event, record.event, author) catch |err| {
             if (host == .server) std.log.warn("failed to refresh branch patch: {s}", .{@errorName(err)});
         };

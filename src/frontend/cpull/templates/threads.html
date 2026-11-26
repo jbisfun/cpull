@@ -11,7 +11,7 @@
 {{ ui.tabs(page.tabs) }}
 <div class="table-responsive tool-tabbed">
 {% if page.labels_view %}
-<div class="p-3">{% for l in page.label_chips %}<a class="badge rounded-pill text-bg-secondary haxy-label fs-6 me-1" href="{{ l.href }}">{{ l.label }}</a>{% else %}<span class="text-body-secondary">{{ page.empty }}</span>{% endfor %}</div>
+<div class="p-3">{% for l in page.label_chips %}<a class="badge rounded-pill text-bg-secondary cpull-label fs-6 me-1" href="{{ l.href }}">{{ l.label }}</a>{% else %}<span class="text-body-secondary">{{ page.empty }}</span>{% endfor %}</div>
 {% else %}
 <table class="table table-sm table-hover align-middle mb-0">
   <thead><tr><th class="text-center">S</th><th>{{ page.noun|capitalize }}</th><th>Opened</th><th class="text-center" title="Comments"><i class="bi bi-chat"></i></th><th>Labels</th></tr></thead>

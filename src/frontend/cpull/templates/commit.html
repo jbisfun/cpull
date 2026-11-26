@@ -19,6 +19,6 @@
   <a class="btn btn-sm btn-outline-secondary" href="{{ page.history_href }}"><i class="bi bi-clock-history"></i> History from here</a>
   {% if page.merge_href %}<a class="btn btn-sm btn-outline-secondary" href="{{ page.merge_href }}">Commits from this merge</a>{% endif %}
 </p>
-{% if page.truncated %}<div class="alert alert-secondary py-1 small">This message is longer than haxy reads; only its start is shown.</div>{% endif %}
+{% if page.truncated %}<div class="alert alert-secondary py-1 small">This message is longer than cpull reads; only its start is shown.</div>{% endif %}
 <pre class="console">{{ page.message }}</pre>
 {% endblock %}

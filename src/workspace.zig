@@ -1,10 +1,10 @@
-// workspace mode: haxy over a pull workspace (github.com/jbisfun/pull), a
+// workspace mode: cpull over a pull workspace (github.com/jbisfun/pull), a
 // pullfile.plist listing repos that move together. the workspace is a stack of
 // repos: an events repo (the workspace root's own repo, or the pullfile
-// `haxy` section's `events` repo) holding the workspace's issues and its
+// `cpull` section's `events` repo) holding the workspace's issues and its
 // stacks, and every pullfile repo (nested ones as "group/name") with its own
 // issues and patches. a stack is a change across repos: one ordinary patch per
-// member repo, landed together. haxy merges the members; pull records the new
+// member repo, landed together. cpull merges the members; pull records the new
 // pins, since it owns the pullfile, its commits and their signatures.
 const std = @import("std");
 const xit = @import("xit");
@@ -21,7 +21,7 @@ const cmd = @import("command.zig");
 pub const Repo = struct {
     // the pullfile name ("" for the workspace root's own repo)
     name: []const u8,
-    // the haxy repo name: "/" becomes "."
+    // the cpull repo name: "/" becomes "."
     key: []const u8,
     // the pullfile branch, which the repo's patches target
     branch: []const u8,
@@ -31,8 +31,8 @@ pub const Repo = struct {
 
 pub const root_key = "workspace";
 
-// the haxy repo name a pullfile repo goes by, here and when its workspace is
-// pushed to a server: haxy names can't hold "/", so a nested "group/name" is
+// the cpull repo name a pullfile repo goes by, here and when its workspace is
+// pushed to a server: cpull names can't hold "/", so a nested "group/name" is
 // "group.name"
 pub fn keyOf(arena: std.mem.Allocator, name: []const u8) ![]const u8 {
     const key = try arena.dupe(u8, name);
@@ -71,6 +71,9 @@ pub const Workspace = struct {
             return error.EventsRepoNotFound;
         } else if (isGitDir(io, arena, root)) .{ .name = "", .key = root_key, .branch = "", .path = root } else null;
         if (events) |e| if (e.name.len == 0) for (repos.items) |r| if (std.mem.eql(u8, r.key, root_key)) return error.RepoNameCollision;
+        // repos still on haxy's events branch move to cpull's
+        for (repos.items) |r| evt.adoptLegacyAt(io, gpa, r.path);
+        if (events) |e| if (e.name.len == 0) evt.adoptLegacyAt(io, gpa, e.path);
         const self = try arena.create(Workspace);
         self.* = .{ .io = io, .gpa = gpa, .root = root, .name = name, .repos = repos.items, .events = events, .global_config_path = global_config_path };
         self.host = .{ .ctx = self, .page = hostPage, .source = hostSource, .merge = hostMerge };
@@ -106,7 +109,7 @@ fn isGitDir(io: std.Io, arena: std.mem.Allocator, dir: []const u8) bool {
     return true;
 }
 
-// the workspace a haxy started in `cwd` views, or null for plain local mode:
+// the workspace a cpull started in `cwd` views, or null for plain local mode:
 // the nearest pullfile, unless a repo nested inside it is nearer
 pub fn detect(io: std.Io, arena: std.mem.Allocator, cwd: []const u8, nearest_repo: ?[]const u8) !?[]const u8 {
     const root = (try pullfile.findRoot(io, arena, cwd)) orelse return null;
@@ -354,7 +357,7 @@ fn mergeInRepo(
     }
     if (!merge or out.outcome == .conflict) return;
 
-    // record the merge as haxy's server does: a revision snapshotting what the
+    // record the merge as cpull's server does: a revision snapshotting what the
     // target gained, and the patch marked merged with it
     const after = (try repo.readRef(io, target_ref)) orelse return error.InvalidTargetBranch;
     out.target_oid = try aa.dupe(u8, &after);
@@ -405,14 +408,14 @@ fn hostMerge(ctx: *anyopaque, arena: *std.heap.ArenaAllocator, id: []const u8) a
     const ws: *Workspace = @ptrCast(@alignCast(ctx));
     const pins = try mergeStack(ws, arena, id);
     const aa = arena.allocator();
-    const result = std.process.run(aa, ws.io, .{ .argv = &.{ ws.pull_exe, "haxy", "pin", id }, .cwd = .{ .path = ws.root } }) catch |err|
+    const result = std.process.run(aa, ws.io, .{ .argv = &.{ ws.pull_exe, "cpull", "pin", id }, .cwd = .{ .path = ws.root } }) catch |err|
         return aa.print("merged {d} repo{s}; pins not recorded: running pull: {s}", .{ pins.len, if (pins.len == 1) "" else "s", @errorName(err) });
     const ok = switch (result.term) {
         .exited => |code| code == 0,
         else => false,
     };
     const output = std.mem.trim(u8, if (ok) result.stdout else result.stderr, " \r\n");
-    if (!ok) return aa.print("merged {d} repo{s}; pull haxy pin failed: {s}", .{ pins.len, if (pins.len == 1) "" else "s", output });
+    if (!ok) return aa.print("merged {d} repo{s}; pull cpull pin failed: {s}", .{ pins.len, if (pins.len == 1) "" else "s", output });
     return aa.print("merged {d} repo{s} and pinned them: {s}", .{ pins.len, if (pins.len == 1) "" else "s", output });
 }
 
@@ -579,7 +582,7 @@ fn statusIds(comptime DB: type, comptime hash_kind: hash.HashKind, moment: DB.Ha
 }
 
 //
-// `haxy stack`, which pull drives
+// `cpull stack`, which pull drives
 //
 
 pub fn runStackCommand(
@@ -603,7 +606,7 @@ pub fn runStackCommand(
         };
     const ws = try Workspace.load(io, gpa, aa, root, global_config_path);
     runStack(ws, &arena, options, out) catch |e| {
-        try err.print("haxy stack {s}: {s}\n", .{ @tagName(options.action), @errorName(e) });
+        try err.print("cpull stack {s}: {s}\n", .{ @tagName(options.action), @errorName(e) });
         return error.HandledError;
     };
 }

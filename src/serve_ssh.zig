@@ -59,7 +59,7 @@ pub const SessionHandler = struct {
         // git otherwise only sees the connection drop. stderr is safe however far its protocol got
         if (failure) |e| if (request == .exec) {
             var buf: [256]u8 = undefined;
-            const line = std.fmt.bufPrint(&buf, "haxy ssh: {s}\n", .{@errorName(e)}) catch "haxy ssh: internal error\n";
+            const line = std.fmt.bufPrint(&buf, "cpull ssh: {s}\n", .{@errorName(e)}) catch "cpull ssh: internal error\n";
             sess.writeStderr(line) catch {};
         };
         const status: u32 = result catch 1;
@@ -84,7 +84,7 @@ pub const SessionHandler = struct {
                     // openssh client terms this is `ssh -T host`. say so and
                     // exit non-zero.
                     logRefusal(self, sess, "shell without a pty");
-                    try sess.writeBytes("haxy ssh: this server only serves the TUI when a pty is allocated (use a normal `ssh` invocation).\r\n");
+                    try sess.writeBytes("cpull ssh: this server only serves the TUI when a pty is allocated (use a normal `ssh` invocation).\r\n");
                     return 1;
                 };
                 // users idle in a TUI legitimately
@@ -254,7 +254,7 @@ fn runTuiSession(handler: *const SessionHandler, sess: *ssh.SessionCtx, pty: ssh
         const err = sess.underlyingError(tui_err);
         serve_common.logError(sess.conn.io, handler.err, "ssh tui session failed: ip={f} error={s}\n", .{ sess.conn.peer, @errorName(err) });
         var buf: [256]u8 = undefined;
-        const msg = std.fmt.bufPrint(&buf, "haxy ssh: {s}\r\n", .{@errorName(err)}) catch "haxy ssh: internal error\r\n";
+        const msg = std.fmt.bufPrint(&buf, "cpull ssh: {s}\r\n", .{@errorName(err)}) catch "cpull ssh: internal error\r\n";
         sess.writeBytes(msg) catch {};
         return 1;
     };
@@ -753,7 +753,7 @@ fn logRefusal(handler: *const SessionHandler, sess: *ssh.SessionCtx, reason: []c
 // the refusals below return the exit status to hand back
 fn writeError(handler: *const SessionHandler, sess: *ssh.SessionCtx, comptime msg: []const u8) !u32 {
     logRefusal(handler, sess, msg);
-    const body = "ERR haxy ssh: " ++ msg;
+    const body = "ERR cpull ssh: " ++ msg;
     var packet: [body.len + 4]u8 = undefined;
     const line = try std.fmt.bufPrint(&packet, "{x:0>4}{s}", .{ packet.len, body });
     try sess.writeBytes(line);
@@ -764,7 +764,7 @@ fn writeError(handler: *const SessionHandler, sess: *ssh.SessionCtx, comptime ms
 fn writeLfsError(handler: *const SessionHandler, sess: *ssh.SessionCtx) !u32 {
     const msg = "Git LFS isn't supported";
     logRefusal(handler, sess, msg);
-    try sess.writeStderr("haxy ssh: " ++ msg ++ "\n");
+    try sess.writeStderr("cpull ssh: " ++ msg ++ "\n");
     return 1;
 }
 
@@ -779,13 +779,13 @@ fn writeKeyError(handler: *const SessionHandler, sess: *ssh.SessionCtx, comptime
         break :known try evt.User.keyHeld(evt.AdminDB, evt.admin_repo_opts.hash, try evt.currentMoment(evt.admin_repo_opts, &admin), &sess.fingerprint);
     };
     if (known) return writeFingerprintError(handler, sess, msg);
-    return writeFingerprintError(handler, sess, "unauthorized: this SSH key isn't added to any haxy account. if you have several keys, your SSH client may be offering a different one first");
+    return writeFingerprintError(handler, sess, "unauthorized: this SSH key isn't added to any cpull account. if you have several keys, your SSH client may be offering a different one first");
 }
 
 // an error line ending with the presented key's fingerprint
 fn writeFingerprintError(handler: *const SessionHandler, sess: *ssh.SessionCtx, comptime msg: []const u8) !u32 {
     logRefusal(handler, sess, msg);
-    const prefix = "ERR haxy ssh: " ++ msg ++ " (key ";
+    const prefix = "ERR cpull ssh: " ++ msg ++ " (key ";
     var packet: [4 + prefix.len + ssh.fingerprint_len + 1]u8 = undefined;
     const line = try std.fmt.bufPrint(&packet, "{x:0>4}" ++ prefix ++ "{s})", .{ packet.len, &sess.fingerprint });
     try sess.writeBytes(line);

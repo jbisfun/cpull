@@ -1,4 +1,4 @@
-// haxy's markdown as html for the templates (ported from hyperhaxy's
+// cpull's markdown as html for the templates (ported from hyperhaxy's
 // markdown.zig). text is always escaped, so raw html shows as written.
 const std = @import("std");
 const md = @import("../../markdown.zig");
@@ -9,7 +9,7 @@ const W = *std.Io.Writer;
 pub fn render(arena: std.mem.Allocator, text: []const u8) !theme.vin.Str {
     const doc = try md.parseText(arena, text);
     var out: std.Io.Writer.Allocating = .init(arena);
-    try out.writer.writeAll("<div class=\"haxy-prose\">");
+    try out.writer.writeAll("<div class=\"cpull-prose\">");
     try blocks(&out.writer, doc.blocks);
     try out.writer.writeAll("</div>");
     return theme.markup(out.written());
@@ -47,7 +47,7 @@ fn writeBlock(w: W, block: md.Block) !void {
             try w.print("</h{d}>", .{level});
         },
         .paragraph => |p| {
-            const class: []const u8 = if (p.center and p.pre) " class=\"text-center haxy-pre\"" else if (p.center) " class=\"text-center\"" else if (p.pre) " class=\"haxy-pre\"" else "";
+            const class: []const u8 = if (p.center and p.pre) " class=\"text-center cpull-pre\"" else if (p.center) " class=\"text-center\"" else if (p.pre) " class=\"cpull-pre\"" else "";
             try w.print("<p{s}>", .{class});
             try inlines(w, p.inlines);
             try w.writeAll("</p>");

@@ -46,7 +46,7 @@ pub const undo_action = "haxy/push";
 
 // deleting this ref, as a push's only update, clears the undo history. it
 // never exists, so a push has to name it in full.
-pub const clear_undo_ref = "refs/haxy/undo";
+pub const clear_undo_ref = "refs/cpull/undo";
 
 // the fixture records a stand-in push with this too, so both write one shape
 pub fn writeUndo(
@@ -171,7 +171,7 @@ fn adoptPushedBranch(
     for (updates) |update| {
         if (zeroOid(update.new_oid)) continue;
         const ref = rf.Ref.initFromPath(update.ref_name, null) orelse continue;
-        // the events branch holds haxy's metadata, not the project
+        // the events branch holds cpull's metadata, not the project
         if (ref.kind != .head or std.mem.eql(u8, ref.name, evt.events_ref.name)) continue;
         return rf.replaceHead(.xit, repo_opts, state, io, .{ .ref = ref });
     }
@@ -376,7 +376,7 @@ fn advertiseAndAwait(
 // writer is announced
 fn lockForPush(io: std.Io, file: std.Io.File, sess: ?*ssh.SessionCtx) !void {
     if (try file.tryLock(io, .exclusive)) return;
-    if (sess) |s| s.writeStderr("haxy ssh: waiting for another change to this repo to finish\n") catch {};
+    if (sess) |s| s.writeStderr("cpull ssh: waiting for another change to this repo to finish\n") catch {};
     try file.lock(io, .exclusive);
 }
 
