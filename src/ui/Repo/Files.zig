@@ -91,6 +91,8 @@ find_available: bool = false,
 no_commits: bool = false,
 // whether the viewed commit has patch data, so a file links to its history
 history: bool = false,
+// cpull: the open anchored issues pointing into `dir`, for line markers
+anchors: []const @import("../../report/anchor.zig").FileAnchor = &.{},
 
 const Self = @This();
 

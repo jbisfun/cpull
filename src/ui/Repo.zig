@@ -13,6 +13,7 @@ const Key = xitui.input.Key;
 const Grid = xitui.grid.Grid;
 const Focus = xitui.focus.Focus;
 const inp = @import("./input.zig");
+const report_anchor = @import("../report/anchor.zig");
 
 pub const Header = @import("./Repo/Header.zig");
 pub const Files = @import("./Repo/Files.zig");
@@ -369,7 +370,7 @@ pub fn init(
                                 const merged = try Commits.resolveMerge(repo_kind, opened.self_repo_opts, arena, opened, io, gpa, commits_merge);
                                 break :merged .{ .object, merged.oid, merged.base_oid };
                             };
-                            const files_data = if (patchrev_id.len != 0)
+                            var files_data = if (patchrev_id.len != 0)
                                 try Files.initPatchRev(repo_kind, opened.self_repo_opts, arena, opened, io, gpa, handle, patchrev_id, files_dir, files_line)
                             else
                                 try Files.init(repo_kind, opened.self_repo_opts, arena, opened, io, gpa, handle, ref_or_oid, ref_value, files_dir, files_line, files_find, files_line_history);
@@ -382,6 +383,9 @@ pub fn init(
                             const target_branch = if (files_data.ref_or_oid == .branch) files_data.ref_or_oid_value else "";
                             var discussions_data = try Discussions.init(repo_kind, opened.self_repo_opts, arena, opened, io, session.haxy_moment, repo_identity.identity, discussions_search, discussions_selected, discussions_comment, discussions_comments_start, discussions_view, tabViewer(handle, repo, .discuss));
                             var issues_data = try Issues.init(repo_kind, opened.self_repo_opts, arena, opened, io, session.haxy_moment, repo_identity.identity, issues_search, issues_selected, issues_comment, issues_comments_start, issues_theirs, issues_view, tabViewer(handle, repo, .issue));
+                            // cpull reports: anchored issues' excerpts and the files view's line markers
+                            if (patchrev_id.len == 0) files_data.anchors = report_anchor.fileAnchors(repo_kind, opened.self_repo_opts, opened, io, arena, files_data.dir) catch &.{};
+                            issues_data.excerpt = if (issues_data.selectedThread()) |entry| if (entry.record.event.anchor) |anchor| report_anchor.excerpt(repo_kind, opened.self_repo_opts, opened, io, arena, anchor) catch null else null else null;
                             var patches_data = try Patches.init(repo_kind, opened.self_repo_opts, arena, opened, io, session.haxy_moment, session, repo_id_maybe, repo_identity.identity, target_branch, patches_search, patches_selected, patches_comment, patches_comments_start, patches_theirs, patches_view, tabViewer(handle, repo, .patch));
                             if (repo_kind == .xit and session.data.host_kind == .server) {
                                 // a server page always resolved its repo id

@@ -1,6 +1,7 @@
 {% extends "theme/layout.html" %}
 {% import "theme/macros.html" as ui %}
 {% import "macros.html" as hx %}
+{% import "report.html" as rp %}
 {% macro comment(cm) -%}
 <div class="card haxy-comment mb-2{% if cm.focused %} haxy-focused{% endif %}" id="comment-{{ cm.id }}">
   <div class="card-header d-flex flex-wrap align-items-center gap-2 small">
@@ -34,6 +35,7 @@
     {% if page.facts %}
     <dl class="tool-facts mb-3">{% for f in page.facts %}<dt>{{ f.term }}</dt><dd>{% if f.href %}<a href="{{ f.href }}">{% endif %}{% if f.mono %}<code>{{ f.value }}</code>{% else %}{{ f.value }}{% endif %}{% if f.href %}</a>{% endif %}</dd>{% endfor %}</dl>
     {% endif %}
+    {% if page.anchor %}{{ rp.anchor(page.anchor) }}{% endif %}
     {% if page.focused %}
     <h2 class="h6 text-body-secondary">Comment on <a href="{{ page.thread_href }}">{{ page.title }}</a></h2>
     {{ comment(page.focused) }}

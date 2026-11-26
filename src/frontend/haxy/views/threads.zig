@@ -9,6 +9,7 @@ const fe = @import("../frontend.zig");
 const ctx = @import("../ctx.zig");
 const markdown = @import("../markdown.zig");
 const repo_views = @import("repo.zig");
+const report_views = @import("report.zig");
 const Ctx = ctx.Ctx;
 const Repo = ui.Repo;
 const RoutablePage = ui.RoutablePage;
@@ -350,6 +351,7 @@ fn detail(c: Ctx, w: *std.Io.Writer, repo: *const Repo, comptime kind: evt.Event
     const open = std.mem.eql(u8, @tagName(status), "open");
     const closed = std.mem.eql(u8, @tagName(status), "closed");
     const can_act = entry.can_modify and !isConflicted(kind, entry);
+    const anchor: ?report_views.AnchorView = if (kind == .issue) try report_views.anchorView(c, data.identity, event.anchor, data.excerpt) else null;
     const extra = try aa.dupe(theme.Link, &.{.{ .label = event.title }});
     try fe.emit(c, w, try repo_views.chrome(c, repo, event.title, extra), "thread.html", .{
         .noun = n.noun,
@@ -371,6 +373,7 @@ fn detail(c: Ctx, w: *std.Io.Writer, repo: *const Repo, comptime kind: evt.Event
         .assign_placeholder = if (c.server()) "Username or email" else "Email",
         .attachments = attachments.items,
         .facts = facts.items,
+        .anchor = anchor,
         .conflict = isConflicted(kind, entry),
         .focused = focused,
         .comments = comments.items,

@@ -1,11 +1,12 @@
 {% extends "theme/layout.html" %}
 {% import "theme/macros.html" as ui %}
+{% import "report.html" as rp %}
 {% macro body(b) -%}
 {% if b.kind == "markdown" %}{{ b.html }}
 {% elif b.kind == "code" %}
 {% if b.note %}<div class="alert alert-secondary py-1 small">{{ b.note }}{% if b.first_href %} <a href="{{ b.first_href }}">First lines</a>{% endif %}{% if b.next_href %} <a href="{{ b.next_href }}">Next lines</a>{% endif %}</div>{% endif %}
 <div class="haxy-code"><table><tbody>
-{% for l in b.lines %}<tr id="L{{ l.number }}"><td class="haxy-num"><a href="{{ b.open_href }}#L{{ l.number }}">{{ l.number }}</a></td><td class="haxy-line">{{ l.text }}</td></tr>
+{% for l in b.lines %}<tr id="L{{ l.number }}"{% if l.reports %} class="haxy-flagged"{% endif %}><td class="haxy-num">{% if l.reports %}{{ rp.flags(l.reports) }}{% endif %}<a href="{{ b.open_href }}#L{{ l.number }}">{{ l.number }}</a></td><td class="haxy-line">{{ l.text }}</td></tr>
 {% endfor %}
 </tbody></table></div>
 {% elif b.kind == "binary" %}{{ ui.empty("Binary file not shown.") }}
@@ -39,7 +40,7 @@
 {%- endmacro %}
 {% if page.file %}
 <div class="card haxy-file">
-  <div class="card-header">{{ pathbar() }}</div>
+  <div class="card-header">{{ pathbar() }}{% if page.body.reports %}{{ rp.list(page.body.reports) }}{% endif %}</div>
   {% if page.body.kind == "code" %}{{ body(page.body) }}{% else %}<div class="card-body">{{ body(page.body) }}</div>{% endif %}
 </div>
 {% else %}

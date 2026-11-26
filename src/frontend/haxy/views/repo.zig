@@ -7,6 +7,7 @@ const theme = @import("../../theme/theme.zig");
 const fe = @import("../frontend.zig");
 const ctx = @import("../ctx.zig");
 const markdown = @import("../markdown.zig");
+const report_views = @import("report.zig");
 const threads = @import("threads.zig");
 const Ctx = ctx.Ctx;
 const Repo = ui.Repo;
@@ -194,7 +195,7 @@ fn unsupported(c: Ctx, w: *std.Io.Writer, data: *const Repo) !void {
 const max_markdown_lines = 2000;
 
 const Entry = struct { name: []const u8, href: []const u8, dir: bool, path: []const u8 = "" };
-const Line = struct { number: usize, text: []const u8 };
+const Line = struct { number: usize, text: []const u8, reports: []const report_views.Marker = &.{} };
 const Body = struct {
     kind: []const u8, // markdown, code, binary, empty, unloaded
     html: theme.vin.Str = theme.markup(""),
@@ -203,6 +204,8 @@ const Body = struct {
     first_href: []const u8 = "",
     next_href: []const u8 = "",
     open_href: []const u8 = "",
+    // cpull: the open reports (anchored issues) on this file
+    reports: []const report_views.Marker = &.{},
 };
 
 fn files(c: Ctx, w: *std.Io.Writer, data: *const Repo) !void {
@@ -330,13 +333,18 @@ fn fileBody(c: Ctx, f: *const Repo.Files, path: []const u8, entry: *const Repo.F
     if (entry.is_binary) return .{ .kind = "binary" };
     const first = entry.window_start == 0 and !entry.has_more;
     if (entry.lines.len == 0 and first) return .{ .kind = "empty" };
+    const reports = try report_views.markers(c, switch (f.handle.location) {
+        .repo => |id| id,
+        .fork => "",
+    }, f.anchors, path, entry.lines, entry.window_start);
     if (isMarkdown(entry.name) and first and entry.lines.len <= max_markdown_lines) {
-        return .{ .kind = "markdown", .html = try markdown.render(aa, try std.mem.join(aa, "\n", entry.lines)) };
+        return .{ .kind = "markdown", .html = try markdown.render(aa, try std.mem.join(aa, "\n", entry.lines)), .reports = reports };
     }
     var lines = try aa.alloc(Line, entry.lines.len);
-    for (entry.lines, 0..) |line, i| lines[i] = .{ .number = entry.window_start + i + 1, .text = line };
+    for (entry.lines, 0..) |line, i| lines[i] = .{ .number = entry.window_start + i + 1, .text = line, .reports = try report_views.onLine(c, reports, entry.window_start + i + 1) };
     return .{
         .kind = "code",
+        .reports = reports,
         .lines = lines,
         .open_href = file_url,
         .note = if (first) "" else try c.print("Showing lines {d}–{d}.", .{ entry.window_start + 1, entry.window_start + entry.lines.len }),

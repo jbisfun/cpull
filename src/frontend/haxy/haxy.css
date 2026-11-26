@@ -45,3 +45,11 @@
 
 /* Row-action icon buttons are bare glyphs: no push-button highlight line. */
 .wiki-content .btn-link { box-shadow: none; text-shadow: none; }
+
+/* cpull reports (line-anchored issues): the issue page's excerpt and the files view's flags */
+.haxy-code tr.haxy-hit, .haxy-code tr.haxy-flagged { background: rgba(255, 193, 7, 0.18); }
+.haxy-code tr.haxy-hit .haxy-num, .haxy-code tr.haxy-flagged .haxy-num { color: var(--bs-body-color); font-weight: 600; }
+.haxy-flag-icon, .haxy-flag-color { color: #d08700; }
+.haxy-flag-icon { margin-right: 0.3rem; }
+.haxy-report .card-footer code.haxy-quote { white-space: pre-wrap; }
+.haxy-report-list { margin-top: 0.35rem; }

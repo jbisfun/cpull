@@ -10,6 +10,59 @@ title: []const u8,
 description: []const u8,
 labels: []const u8, // space-separated
 status: Status = .open,
+// cpull: a line of code the issue is about (a radar-style report). optional
+// and only serialized when set, so issues without one stay byte-identical and
+// older haxy builds read anchored issues fine (they ignore unknown fields).
+anchor: ?Anchor = null,
+
+// where an anchored issue points: a file of the repo holding the issue (or, in
+// the workspace events repo, a path relative to the workspace root), a 1-based
+// line, that line's text when filed, the narrower text selected, the commit
+// the line number refers to, and where it was filed from (cli, wiki, ycode,
+// mcp, radar)
+pub const Anchor = struct {
+    file: []const u8,
+    line: u64,
+    line_text: []const u8 = "",
+    quote: ?[]const u8 = null,
+    commit: ?[]const u8 = null,
+    source: ?[]const u8 = null,
+
+    pub fn jsonStringify(self: Anchor, jw: anytype) !void {
+        try jw.beginObject();
+        try jw.objectField("file");
+        try jw.write(self.file);
+        try jw.objectField("line");
+        try jw.write(self.line);
+        try jw.objectField("line_text");
+        try jw.write(self.line_text);
+        inline for (.{ "quote", "commit", "source" }) |name| {
+            if (@field(self, name)) |value| {
+                try jw.objectField(name);
+                try jw.write(value);
+            }
+        }
+        try jw.endObject();
+    }
+};
+
+// the stock fields in haxy's order, then the anchor only when there is one
+pub fn jsonStringify(self: Self, jw: anytype) !void {
+    try jw.beginObject();
+    try jw.objectField("title");
+    try jw.write(self.title);
+    try jw.objectField("description");
+    try jw.write(self.description);
+    try jw.objectField("labels");
+    try jw.write(self.labels);
+    try jw.objectField("status");
+    try jw.write(self.status);
+    if (self.anchor) |anchor| {
+        try jw.objectField("anchor");
+        try jw.write(anchor);
+    }
+    try jw.endObject();
+}
 
 // what the db stores: the event's data plus the commit-derived fields
 pub const Record = struct {

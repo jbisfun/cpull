@@ -5,6 +5,7 @@ pub const CommandKind = enum {
     serve,
     delete_user,
     stack,
+    report,
 };
 
 const Help = struct {
@@ -41,6 +42,24 @@ fn commandHelp(command_kind: CommandKind) Help {
             \\haxy stack new --title "rename the api" core:feature app/web:feature
             \\haxy stack merge 5f1c
             \\haxy stack show 5f1c
+            \\--workspace DIR names the workspace; by default, the one around the current dir.
+            ,
+        },
+        .report => .{
+            .name = "report",
+            .descrip =
+            \\line-anchored issues in a pull workspace (what radar was): a line of
+            \\code plus a note, filed as an issue in the repo it points at ("." =
+            \\the workspace's events repo). the line text is read from the file.
+            \\list, show, close and reopen take every repo's reports; an id prefix
+            \\will do. migrate files `radar list --all --json` output ("-" = stdin).
+            ,
+            .example =
+            \\cpull report pull src/main.zig 42 -q "unwrap()" -n "panics on an empty pullfile"
+            \\cpull report list [--all] [--json]
+            \\cpull report show 5f1c / close 5f1c / reopen 5f1c
+            \\cpull report migrate radar.json
+            \\--title, --labels and --source (default cli) set those fields; --json prints json.
             \\--workspace DIR names the workspace; by default, the one around the current dir.
             ,
         },
@@ -135,6 +154,11 @@ pub const CommandArgs = struct {
         .{"--title"},
         .{"--description"},
         .{"--labels"},
+        .{"-q"},
+        .{"--quote"},
+        .{"-n"},
+        .{"--note"},
+        .{"--source"},
     });
 
     pub fn init(allocator: std.mem.Allocator, args: []const []const u8) !CommandArgs {
@@ -234,6 +258,8 @@ pub const StackOptions = struct {
     labels: []const u8 = "",
 };
 
+pub const ReportOptions = @import("report/report.zig").Options;
+
 // `haxy` with no command: local mode
 pub const LocalOptions = struct {
     // the pull workspace to view instead of the repo around the current dir
@@ -247,6 +273,7 @@ pub const Command = union(CommandKind) {
     serve: srv.Options,
     delete_user: srv.DeleteUserOptions,
     stack: StackOptions,
+    report: ReportOptions,
 
     pub fn initMaybe(cmd_args: *CommandArgs) !?Command {
         const command_kind = cmd_args.command_kind orelse return null;
@@ -275,6 +302,23 @@ pub const Command = union(CommandKind) {
                 if (cmd_args.get("--description")) |value_maybe| options.description = value_maybe orelse return error.DescriptionNeedsValue;
                 if (cmd_args.get("--labels")) |value_maybe| options.labels = value_maybe orelse return error.LabelsNeedsValue;
                 return .{ .stack = options };
+            },
+            .report => {
+                const action, const rest = @import("report/report.zig").parseAction(cmd_args.positional_args) orelse return null;
+                var options: ReportOptions = .{ .action = action, .args = rest };
+                if (cmd_args.get("--workspace")) |value_maybe| options.workspace_path = value_maybe orelse return error.WorkspaceNeedsValue;
+                inline for (.{ "-q", "--quote" }) |flag| if (cmd_args.get(flag)) |value_maybe| {
+                    options.quote = value_maybe orelse return error.QuoteNeedsValue;
+                };
+                inline for (.{ "-n", "--note" }) |flag| if (cmd_args.get(flag)) |value_maybe| {
+                    options.note = value_maybe orelse return error.NoteNeedsValue;
+                };
+                if (cmd_args.get("--title")) |value_maybe| options.title = value_maybe orelse return error.TitleNeedsValue;
+                if (cmd_args.get("--labels")) |value_maybe| options.labels = value_maybe orelse return error.LabelsNeedsValue;
+                if (cmd_args.get("--source")) |value_maybe| options.source = value_maybe orelse return error.SourceNeedsValue;
+                options.all = cmd_args.contains("--all");
+                options.json = cmd_args.contains("--json");
+                return .{ .report = options };
             },
         }
     }

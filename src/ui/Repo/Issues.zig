@@ -112,6 +112,8 @@ view: ui.RoutablePage.IssuesView,
 description_page: bool = false,
 // every label in the repo, in sorted order, for the labels view.
 labels: []const []const u8,
+// cpull: the selected issue's anchored code, when it has an anchor
+excerpt: ?@import("../../report/anchor.zig").Excerpt = null,
 // the on-disk repo this page was read from, for the terminal submit path
 // (the web posts the new-issue form to the issue route instead).
 repo_source: ?ui.RepoSource = null,

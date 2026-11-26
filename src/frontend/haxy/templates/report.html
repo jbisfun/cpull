@@ -1,0 +1,40 @@
+{#- cpull reports: line-anchored issues (src/report/, views/report.zig). -#}
+
+{#- The anchored code on an issue's page: {location, file_href, line_text, quote, source, commit, commit_href, note, changed, lines: [{number, text, hit}]}. -#}
+{% macro anchor(a) -%}
+<div class="card haxy-file haxy-report mb-3">
+  <div class="card-header d-flex flex-wrap align-items-center gap-2 small">
+    <i class="bi bi-crosshair text-body-secondary"></i>
+    <a class="font-monospace" href="{{ a.file_href }}">{{ a.location }}</a>
+    {% if a.source %}<span class="text-body-secondary">filed from {{ a.source }}</span>{% endif %}
+    {% if a.commit %}<span class="text-body-secondary ms-auto">at <a class="font-monospace" href="{{ a.commit_href }}">{{ a.commit }}</a></span>{% endif %}
+  </div>
+  {% if a.lines %}
+  <div class="haxy-code"><table><tbody>
+  {% for l in a.lines %}<tr{% if l.hit %} class="haxy-hit"{% endif %}><td class="haxy-num">{{ l.number }}</td><td class="haxy-line">{{ l.text }}</td></tr>
+  {% endfor %}
+  </tbody></table></div>
+  {% else %}
+  <div class="haxy-code"><table><tbody><tr class="haxy-hit"><td class="haxy-num">{{ a.location }}</td><td class="haxy-line">{{ a.line_text }}</td></tr></tbody></table></div>
+  {% endif %}
+  <div class="card-footer small text-body-secondary">
+    {% if a.quote %}<div class="mb-1">Selected: <code class="haxy-quote">{{ a.quote }}</code></div>{% endif %}
+    {% if a.changed %}<div class="mb-1">Filed as: <code>{{ a.line_text }}</code></div>{% endif %}
+    {{ a.note }}
+  </div>
+</div>
+{%- endmacro %}
+
+{#- The flags in a file's line-number column: [{line, title, href, short_id}]. -#}
+{% macro flags(items) -%}
+{% for m in items %}<a class="haxy-flag-icon" href="{{ m.href }}" title="{{ m.title }}"><i class="bi bi-flag-fill"></i></a>{% endfor %}
+{%- endmacro %}
+
+{#- The open reports on a file, above its contents. -#}
+{% macro list(items) -%}
+{% if items %}
+<ul class="list-unstyled small mb-0 haxy-report-list">
+  {% for m in items %}<li><i class="bi bi-flag-fill haxy-flag-color"></i> <a href="#L{{ m.line }}">line {{ m.line }}</a> · <a href="{{ m.href }}">{{ m.title }}</a></li>{% endfor %}
+</ul>
+{% endif %}
+{%- endmacro %}

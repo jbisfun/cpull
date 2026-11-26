@@ -370,7 +370,7 @@ fn mergeInRepo(
 // run `f(opts, ws, repo, author, args)` on the git repo `r` points at. the
 // author, pull's identity as pinned in the repo's config, is only resolved
 // (and required) when `f` writes; a reader gets a placeholder it must not use.
-fn withRepo(ws: *const Workspace, r: Repo, write: bool, comptime f: anytype, args: anytype) !void {
+pub fn withRepo(ws: *const Workspace, r: Repo, write: bool, comptime f: anytype, args: anytype) !void {
     var arena = std.heap.ArenaAllocator.init(ws.gpa);
     defer arena.deinit();
     const src = ws.source(r);

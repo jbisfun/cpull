@@ -184,6 +184,7 @@ pub fn run(
             .serve => |options| try srv.run(repo_kind, any_repo_opts, io, allocator, cwd_path, options, run_opts.err, {}),
             .delete_user => |options| try srv.deleteUser(io, allocator, cwd_path, options, run_opts.out, run_opts.err),
             .stack => |options| try ws.runStackCommand(io, allocator, cwd_path, options, run_opts.global_config_path, run_opts.out, run_opts.err),
+            .report => |options| try @import("report/report.zig").run(io, allocator, cwd_path, options, run_opts.global_config_path, run_opts.out, run_opts.err),
         },
     }
 }
