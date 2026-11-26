@@ -19,7 +19,7 @@
   {% for m in page.members %}
     <tr>
       <td class="text-center">{{ ui.ball(m.ball, "", m.mergeable) }}</td>
-      <td>{% if m.repo_href %}<a href="{{ m.repo_href }}">{{ m.repo }}</a>{% else %}{{ m.repo }}{% endif %}</td>
+      <td>{% if m.repo_href %}<a class="cpull-repo" href="{{ m.repo_href }}">{{ m.repo_avatar }}{{ m.repo }}</a>{% else %}<span class="cpull-repo">{{ m.repo_avatar }}{{ m.repo }}</span>{% endif %}</td>
       <td>{% if m.href %}<a class="fw-semibold" href="{{ m.href }}">{{ m.title }}</a>{% else %}{{ m.title }}{% endif %}</td>
       <td><code>{{ m.source_branch }} → {{ m.target_branch }}</code></td>
       <td>{{ m.status }}</td>

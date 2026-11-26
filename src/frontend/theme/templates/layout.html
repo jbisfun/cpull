@@ -19,7 +19,7 @@
   scheme.addEventListener("change", applyScheme);
 </script>
 <link rel="icon" href="{{ layout.assets }}/icons/favicon.ico" sizes="32x32">
-<link rel="icon" href="{{ layout.assets }}/icons/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="{% if layout.icon %}{{ layout.icon }}{% else %}{{ layout.assets }}/icons/favicon.svg{% endif %}" type="image/svg+xml">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
 <link rel="stylesheet" href="{{ layout.assets }}/style.css">
@@ -54,7 +54,7 @@
 <div class="tool-crumbs">
   <ol class="breadcrumb">
     {% for crumb in layout.crumbs %}
-    <li class="breadcrumb-item{% if loop.last and not loop.first %} active{% endif %}">{% if (loop.last and not loop.first) or not crumb.href %}{{ crumb.label }}{% else %}<a href="{{ crumb.href }}">{{ crumb.label }}</a>{% endif %}</li>
+    <li class="breadcrumb-item{% if loop.last and not loop.first %} active{% endif %}">{% if (loop.last and not loop.first) or not crumb.href %}{{ crumb.avatar }}{{ crumb.label }}{% else %}<a href="{{ crumb.href }}">{{ crumb.avatar }}{{ crumb.label }}</a>{% endif %}</li>
     {% endfor %}
   </ol>
 </div>
@@ -73,7 +73,7 @@
       <ul>
         {% for r in g.rows %}
         <li><a class="{% if r.active %}active{% endif %}" href="{{ r.href }}"{% if r.title %} title="{{ r.title }}"{% endif %}>
-          {% if r.ball %}{{ ui.ball(r.ball, "tool-ball") }}{% elif r.icon %}<i class="bi bi-{{ r.icon }}"></i>{% endif %}<span class="text-truncate">{{ r.label }}</span>
+          {% if r.ball %}{{ ui.ball(r.ball, "tool-ball") }}{% elif r.icon %}<i class="bi bi-{{ r.icon }}"></i>{% endif %}{{ r.avatar }}<span class="text-truncate">{{ r.label }}</span>
           {% if r.detail %}<span class="ms-auto text-nowrap small">{{ r.detail }}</span>{% endif %}
         </a></li>
         {% else %}

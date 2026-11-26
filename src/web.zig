@@ -11,6 +11,8 @@ const ui = @import("./ui.zig");
 const fork = @import("./fork.zig");
 const pch = @import("./patch.zig");
 const notify = @import("./notify.zig");
+// cpull: repo identicons (served at /<repo>/icon.svg)
+const identicon = @import("./frontend/theme/identicon.zig");
 const xitui = xit.xitui;
 const wgt = xitui.widget;
 const Focus = xitui.focus.Focus;
@@ -333,6 +335,7 @@ fn handleRequest(
     // matched before the routable pages
     if (ui.RoutablePage.fromRawUrl(path, host == .local and host.local.workspace == null)) |raw| return serveRaw(io, request, allocator, raw, host);
     if (attachmentRequest(path)) |attachment| return serveAttachment(io, request, allocator, attachment, host);
+    if (repoIconName(host, path)) |name| return serveRepoIcon(request, allocator, name);
 
     // embeds are matched before the pages so an embed's name never reads as a user
     if (findEmbed(path)) |embed| {
@@ -2729,6 +2732,39 @@ fn renderPage(
         try out.appendSlice(allocator, template[cursor..]);
     }
     return try out.toOwnedSlice(allocator);
+}
+
+// cpull: a repo's identicon at /<owner>:<name>/icon.svg (/icon.svg for plain
+// local mode's repo), drawn from the cpull repo name like the themed pages'
+// inline copies (src/frontend/theme/identicon.zig). any well-formed repo url
+// gets one: it is a pure function of the name, so nothing is looked up.
+fn repoIconName(host: Host, path: []const u8) ?[]const u8 {
+    const suffix = "/icon.svg";
+    if (!std.mem.endsWith(u8, path, suffix)) return null;
+    const base = path[0 .. path.len - suffix.len];
+    if (host == .local and host.local.workspace == null) {
+        if (base.len != 0) return null;
+        const source = host.local.source orelse return null;
+        return std.Io.Dir.path.basename(source.path);
+    }
+    const identity = repoBaseIdentity(base) orelse return null;
+    return (evt.parseOwnerRepoPath(identity) orelse return null).name;
+}
+
+fn serveRepoIcon(request: *std.http.Server.Request, allocator: std.mem.Allocator, name: []const u8) !void {
+    const svg = try identicon.tileFor(allocator, name, .{ .standalone = true });
+    defer allocator.free(svg);
+    const tag = std.fmt.hex(std.hash.Wyhash.hash(0, svg));
+    const etag = "\"".* ++ tag ++ "\"".*;
+    const headers: []const std.http.Header = &.{
+        .{ .name = "content-type", .value = "image/svg+xml" },
+        // the same name always draws the same icon
+        .{ .name = "cache-control", .value = "public, max-age=86400" },
+        .{ .name = "etag", .value = &etag },
+    };
+    if (getHeader(request, "if-none-match")) |value| if (std.mem.indexOf(u8, value, &tag) != null)
+        return request.respond("", .{ .status = .not_modified, .extra_headers = headers });
+    return request.respond(svg, .{ .extra_headers = headers });
 }
 
 fn findEmbed(request_path: []const u8) ?Embed {

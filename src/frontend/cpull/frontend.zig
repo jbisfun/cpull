@@ -75,6 +75,8 @@ pub const Chrome = struct {
     nav: []const u8 = "",
     tasks: []const theme.Link = &.{},
     groups: []const theme.Group = &.{},
+    // an svg favicon url, e.g. a repo's identicon
+    icon: []const u8 = "",
 };
 
 // renders `template` with the page's layout and `data` as `page`
@@ -144,5 +146,6 @@ fn buildLayout(c: Ctx, chrome: Chrome) !theme.Layout {
         .flashes = flashes.items,
         .footer = footer.items,
         .stylesheets = &.{"/assets/cpull.css"},
+        .icon = chrome.icon,
     };
 }

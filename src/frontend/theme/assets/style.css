@@ -491,3 +491,18 @@ a:hover { text-decoration: underline; }
 /* The global bar reserves the bold width of each item, so the active one doesn't shift the others. */
 .wiki-globalnav .navbar-nav .nav-link[data-label] { display: inline-flex; flex-direction: column; align-items: center; }
 .wiki-globalnav .navbar-nav .nav-link[data-label]::after { content: attr(data-label); font-weight: 700; height: 0; overflow: hidden; visibility: hidden; user-select: none; pointer-events: none; }
+
+/* Identicons (theme.avatar / identicon.zig): a rounded tile behind the cells, light gray like
+   identicon.js's default background, graphite in dark mode. identicon.zig's standalone_style
+   holds the same two colours for the served /<repo>/icon.svg. */
+:root, [data-bs-theme="light"] { --cpull-identicon-bg: #f0f0f0; --cpull-identicon-ring: rgba(0, 0, 0, 0.08); }
+[data-bs-theme="dark"] { --cpull-identicon-bg: #26272a; --cpull-identicon-ring: rgba(255, 255, 255, 0.08); }
+.cpull-identicon { flex: none; display: inline-block; vertical-align: -0.2em; width: 1rem; height: 1rem; border-radius: 12.5%; box-shadow: 0 0 0 1px var(--cpull-identicon-ring); }
+.cpull-identicon .cpull-identicon-bg { fill: var(--cpull-identicon-bg); }
+.cpull-identicon-sm { width: 1rem; height: 1rem; }
+.cpull-identicon-md { width: 1.5rem; height: 1.5rem; vertical-align: middle; }
+.cpull-identicon-lg { width: 2rem; height: 2rem; }
+.wiki-sidebar li > a .cpull-identicon { margin-right: 0.4rem; }
+.wiki-sidebar a.active .cpull-identicon { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6); }
+.tool-crumbs .cpull-identicon { width: 0.9rem; height: 0.9rem; margin-right: 0.3rem; vertical-align: -0.15em; }
+.cpull-repo { display: inline-flex; align-items: center; gap: 0.45rem; }

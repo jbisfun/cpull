@@ -153,7 +153,7 @@ pub fn chrome(c: Ctx, data: *const Repo, title: []const u8, extra: []const theme
 
     var crumbs: std.ArrayList(theme.Link) = .empty;
     const name = if (data.header.owner_name.len > 0 and c.workspace() == null) try c.print("{s}:{s}", .{ data.header.owner_name, data.header.name }) else data.header.name;
-    try crumbs.append(aa, .{ .label = name, .href = try c.routeUrl(RoutablePage.repoFilesRoute(id, null, "", "", 0)) });
+    try crumbs.append(aa, .{ .label = name, .href = try c.routeUrl(RoutablePage.repoFilesRoute(id, null, "", "", 0)), .avatar = try c.repoAvatar(data.header.name, "cpull-identicon-sm") });
     try crumbs.append(aa, .{ .label = tabLabel(data, current), .href = try tabHref(c, data, current) });
     try crumbs.appendSlice(aa, extra);
     return .{
@@ -162,7 +162,16 @@ pub fn chrome(c: Ctx, data: *const Repo, title: []const u8, extra: []const theme
         .nav = if (c.workspace() != null) "home" else "",
         .tasks = tasks.items,
         .groups = groups.items,
+        .icon = try iconUrl(c, data),
     };
+}
+
+// the repo's identicon as a file (web.zig serves /<repo>/icon.svg), for the
+// favicon; plain local mode's repo is "/", a fork page has none
+fn iconUrl(c: Ctx, data: *const Repo) ![]const u8 {
+    const id = identity(data);
+    if (id.len > 0) return c.print("/{s}/icon.svg", .{id});
+    return if (c.workspace() == null and !c.server() and data.handle.location == .repo) "/icon.svg" else "";
 }
 
 pub fn page(c: Ctx, w: *std.Io.Writer, data: *const Repo) !void {
@@ -271,6 +280,7 @@ fn files(c: Ctx, w: *std.Io.Writer, data: *const Repo) !void {
     const title = if (path.len > 0) path else data.header.name;
     try fe.emit(c, w, try chrome(c, data, title, &.{}), "files.html", .{
         .name = data.header.name,
+        .avatar = try c.repoAvatar(data.header.name, "cpull-identicon-lg"),
         .description = data.repo.event.description,
         .no_commits = f.no_commits,
         .ref_kind = ref_kind,
