@@ -16,6 +16,10 @@
             .url = "git+https://github.com/deatil/zig-vin#b7d184c0ef97dd9c586f8ab0710166a57032e57f",
             .hash = "zig_vin-0.2.7-Lkc0nLJICgDWSw2UYdRvLZxglhIEyQlUSRML4v5Y_SNn",
         },
+        .sqlite = .{
+            .url = "git+https://github.com/vrischmann/zig-sqlite#1eba1e490629897e71dc3a23aad6fe9a319e0c82",
+            .hash = "sqlite-3.48.0-F2R_azOoDgB4eu7BHE5c8WtBnKufFQnhD1xqD5TgTxg4",
+        },
     },
     .paths = .{
         "build.zig",

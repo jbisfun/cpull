@@ -1,0 +1,89 @@
+{% extends "ci/base.html" %}
+{% import "ci/macros.html" as ci %}
+{% block tasks %}
+{{ ci.task("arrow-up-circle", "Back to Dashboard", "/ci") }}
+{{ ci.task("clipboard-data", "Status", "/ci/projects/" ~ page.project.path) }}
+{{ ci.task("play-circle", "Build Now", "#", 'data-queue="build" data-project="' ~ page.project.path|e ~ '" data-go') }}
+{{ ci.task("check2-circle", "Run Tests", "#", 'data-queue="test" data-project="' ~ page.project.path|e ~ '" data-go') }}
+{{ ci.task("sliders", "Build with Parameters", "#params") }}
+{{ ci.task("clock-history", "Build History", page.history_href) }}
+{{ ci.task("gear", "Configure", "#", 'data-bs-toggle="modal" data-bs-target="#config"') }}
+{% endblock %}
+{% block sidepanels %}{{ ci.history(page.builds, page.history_href) }}{% endblock %}
+{% block content %}
+{% set project = page.project %}
+<h1 class="h3 d-flex align-items-center gap-2">
+  {{ ci.ball(project.ball, "ball-lg") }}
+  Project {{ project.name }} {{ ci.weather(project.health, project.weather) }}
+</h1>
+<p class="text-body-secondary mb-3">
+  <code>{{ project.path }}</code> · <i class="bi bi-git"></i> {{ project.repo or "no repo" }}
+  {{ project.branch or "-" }}@<code>{{ project.head or "-" }}</code>{% if project.dirty %} <span class="badge text-bg-warning">dirty</span>{% endif %}
+</p>
+
+<div class="row g-4">
+  <div class="col-xl-6">
+    <h2 class="h5">Permalinks</h2>
+    <ul class="mb-4">
+      {% for l in page.permalinks %}
+      <li><a href="/ci/jobs/{{ l.brief.id }}">{{ l.label }} (#{{ l.brief.id }})</a>, {{ l.brief.finished_ago }} ago</li>
+      {% endfor %}
+      {% if not project.last_build %}<li class="text-body-secondary">No builds yet.</li>{% endif %}
+    </ul>
+
+    <h2 class="h5">Targets</h2>
+    {% if project.targets_error %}<div class="alert alert-danger py-2">{{ project.targets_error }}</div>{% endif %}
+    <div class="table-responsive mb-4"><table class="table table-sm border mb-0">
+      <thead><tr><th>Name</th><th>Kind</th><th>Builder</th><th>Bundle ID</th><th>Platform</th><th>Dir</th></tr></thead>
+      <tbody>
+      {% for t in project.targets %}
+        <tr><td class="fw-semibold">{{ t.name }}</td><td><span class="badge text-bg-light border">{{ t.kind }}</span></td><td>{{ t.builder }}</td>
+          <td>{% if t.bundle_id %}<code>{{ t.bundle_id }}</code>{% endif %}</td><td class="text-nowrap">{{ t.platform }}</td><td class="text-nowrap"><code>{{ t.dir }}</code></td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+
+    <h2 class="h5">Latest by command</h2>
+    <table class="table table-sm border">
+      <thead><tr><th>S</th><th>Command</th><th>Build</th><th>When</th><th>Duration</th></tr></thead>
+      <tbody>
+      {% for l in project.last %}
+        <tr><td>{{ ci.ball(l.brief.status) }}</td><td>{{ l.command }}</td><td><a href="/ci/jobs/{{ l.brief.id }}">#{{ l.brief.id }}</a></td><td>{{ l.brief.created_dt }}</td><td>{{ l.brief.dur }}</td></tr>
+      {% else %}
+        <tr><td colspan="5" class="text-body-secondary">No builds yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col-xl-6">
+    <div class="card" id="params">
+      <div class="card-header fw-bold"><i class="bi bi-sliders"></i> Build with Parameters</div>
+      <form class="card-body" data-queue-form>
+        <input type="hidden" name="project" value="{{ project.path }}">
+        <div class="mb-3"><label class="form-label fw-semibold">command</label>
+          <select class="form-select" name="command">{% for c in base.commands %}<option>{{ c }}</option>{% endfor %}</select>
+          <div class="form-text">idl subcommand to run in <code>{{ project.path }}</code>.</div></div>
+        <div class="mb-3"><label class="form-label fw-semibold">targets</label>
+          <select class="form-select" name="targets" multiple size="{{ page.targets_size }}">
+            {% for t in project.targets %}<option value="{{ t.name }}">{{ t.name }} ({{ t.kind }})</option>{% endfor %}
+          </select>
+          <div class="form-text">None selected = all targets.</div></div>
+        <div class="mb-3"><label class="form-label fw-semibold">configuration</label>
+          <select class="form-select" name="configuration"><option value="none">idl default</option><option>debug</option><option>release</option></select></div>
+        <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="strict" id="strict">
+          <label class="form-check-label" for="strict">strict <span class="text-body-secondary">(--strict for build/check)</span></label></div>
+        <button class="btn btn-primary"><i class="bi bi-play-fill"></i> Build</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="config" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Configure: {{ project.path }}/idlproj.yml</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><pre class="console mb-0">{{ page.config }}</pre></div>
+    <div class="modal-footer small text-body-secondary">Read-only: edit idlproj.yml in the repo; targets reload when it changes.</div>
+  </div></div>
+</div>
+{% endblock %}
