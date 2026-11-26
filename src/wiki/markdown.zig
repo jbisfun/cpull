@@ -212,6 +212,7 @@ fn parseOff(arena: Allocator, content: []const u8) ?struct { attrs: Attrs, cut: 
 const Renderer = struct {
     arena: Allocator,
     source: []const u8 = "",
+    lines: std.ArrayList([]const u8) = .empty,
     out: Out = .empty,
     last_lf: bool = true,
     attrs: *std.AutoHashMapUnmanaged(u32, Attrs),
@@ -254,7 +255,17 @@ const Renderer = struct {
     fn sourcepos(r: *Renderer, n: *c.Node) !void {
         const sl = c.cmark_node_get_start_line(n);
         if (sl <= 0) return;
-        try r.print(" data-sourcepos=\"{d}:{d}-{d}:{d}\"", .{ sl, c.cmark_node_get_start_column(n), c.cmark_node_get_end_line(n), c.cmark_node_get_end_column(n) });
+        var el = c.cmark_node_get_end_line(n);
+        var ec = c.cmark_node_get_end_column(n);
+        // cmark ends some blocks at column 0 of the line after them; comrak
+        // ends them on their last non-blank line
+        if (ec == 0 and el > sl) {
+            el -= 1;
+            while (el > sl and std.mem.trim(u8, r.line(el) orelse "", " \t\r").len == 0) el -= 1;
+            const last: []const u8 = r.line(el) orelse "";
+            ec = @intCast(last.len);
+        }
+        try r.print(" data-sourcepos=\"{d}:{d}-{d}:{d}\"", .{ sl, c.cmark_node_get_start_column(n), el, ec });
     }
 
     /// comrak's code span positions include the backticks; cmark's cover the
@@ -280,12 +291,27 @@ const Renderer = struct {
         try r.print(" data-sourcepos=\"{d}:{d}-{d}:{d}\"", .{ sl, sc, el, ec });
     }
 
+    /// cmark-gfm's autolink extension starts a bare URL's link one column
+    /// early (on the space before it); comrak starts it on the URL.
+    fn linkSourcepos(r: *Renderer, n: *c.Node) !void {
+        const sl = c.cmark_node_get_start_line(n);
+        if (sl <= 0) return;
+        var sc = c.cmark_node_get_start_column(n);
+        if (r.line(sl)) |text| {
+            const i: usize = @intCast(@max(sc - 1, 0));
+            if (i < text.len and (text[i] == ' ' or text[i] == '\t')) sc += 1;
+        }
+        try r.print(" data-sourcepos=\"{d}:{d}-{d}:{d}\"", .{ sl, sc, c.cmark_node_get_end_line(n), c.cmark_node_get_end_column(n) });
+    }
+
     fn line(r: *Renderer, number: c_int) ?[]const u8 {
         if (number < 1) return null;
-        var it = std.mem.splitScalar(u8, r.source, '\n');
-        var i: c_int = 1;
-        while (it.next()) |l| : (i += 1) if (i == number) return l;
-        return null;
+        if (r.lines.items.len == 0) {
+            var it = std.mem.splitScalar(u8, r.source, '\n');
+            while (it.next()) |l| r.lines.append(r.arena, std.mem.trimEnd(u8, l, "\r")) catch return null;
+        }
+        const i: usize = @intCast(number - 1);
+        return if (i < r.lines.items.len) r.lines.items[i] else null;
     }
 
     fn typeString(n: *c.Node) []const u8 {
@@ -482,7 +508,7 @@ const Renderer = struct {
             },
             .link => {
                 try r.write("<a");
-                try r.sourcepos(n);
+                try r.linkSourcepos(n);
                 try r.write(" href=\"");
                 try r.escapeHref(if (c.cmark_node_get_url(n)) |u| std.mem.span(u) else "");
                 const title = if (c.cmark_node_get_title(n)) |t| std.mem.span(t) else "";

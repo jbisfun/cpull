@@ -5,6 +5,7 @@ pub const CommandKind = enum {
     serve,
     delete_user,
     stack,
+    wiki,
 };
 
 const Help = struct {
@@ -41,6 +42,24 @@ fn commandHelp(command_kind: CommandKind) Help {
             \\cpull stack new --title "rename the api" core:feature app/web:feature
             \\cpull stack merge 5f1c
             \\cpull stack show 5f1c
+            \\--workspace DIR names the workspace; by default, the one around the current dir.
+            ,
+        },
+        .wiki => .{
+            .name = "wiki",
+            .descrip =
+            \\the workspace wiki: a static site from every repo's README, docs/
+            \\and code reference, with <workspace>/wiki as its data (wiki.toml,
+            \\templates, pages, locales, translations). build writes it to
+            \\.pull/cpull/wiki/dist, regenerating only what changed; publish also
+            \\mirrors it into jbisfun.github.io and stages it. the workspace web
+            \\server serves it live at /wiki/.
+            ,
+            .example =
+            \\cpull wiki build
+            \\cpull wiki build --force
+            \\cpull wiki publish
+            \\cpull wiki clean
             \\--workspace DIR names the workspace; by default, the one around the current dir.
             ,
         },
@@ -247,6 +266,7 @@ pub const Command = union(CommandKind) {
     serve: srv.Options,
     delete_user: srv.DeleteUserOptions,
     stack: StackOptions,
+    wiki: @import("wiki/wiki.zig").Options,
 
     pub fn initMaybe(cmd_args: *CommandArgs) !?Command {
         const command_kind = cmd_args.command_kind orelse return null;
@@ -275,6 +295,15 @@ pub const Command = union(CommandKind) {
                 if (cmd_args.get("--description")) |value_maybe| options.description = value_maybe orelse return error.DescriptionNeedsValue;
                 if (cmd_args.get("--labels")) |value_maybe| options.labels = value_maybe orelse return error.LabelsNeedsValue;
                 return .{ .stack = options };
+            },
+            .wiki => {
+                const positional = cmd_args.positional_args;
+                if (positional.len != 1) return null;
+                const Options = @import("wiki/wiki.zig").Options;
+                const action = std.meta.stringToEnum(@FieldType(Options, "action"), positional[0]) orelse return null;
+                var options: Options = .{ .action = action, .force = cmd_args.contains("--force") };
+                if (cmd_args.get("--workspace")) |value_maybe| options.workspace_path = value_maybe orelse return error.WorkspaceNeedsValue;
+                return .{ .wiki = options };
             },
         }
     }

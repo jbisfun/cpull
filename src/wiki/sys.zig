@@ -11,7 +11,7 @@ pub const Sys = struct {
 
     pub fn getenv(s: Sys, name: []const u8) ?[]const u8 {
         if (s.env) |m| return m.get(name);
-        const z = s.arena.dupeZ(u8, name) catch return null;
+        const z = s.arena.dupeSentinel(u8, name, 0) catch return null;
         const v = std.c.getenv(z) orelse return null;
         return std.mem.span(v);
     }
@@ -55,10 +55,7 @@ pub const Sys = struct {
     }
 
     pub fn removeTree(s: Sys, path: []const u8) !void {
-        Dir.cwd().deleteTree(s.io, path) catch |err| switch (err) {
-            error.FileNotFound => {},
-            else => return err,
-        };
+        try Dir.cwd().deleteTree(s.io, path);
     }
 
     pub fn removeFile(s: Sys, path: []const u8) void {

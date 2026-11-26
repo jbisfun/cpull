@@ -22,6 +22,7 @@ const cookie_name = "cpull_session";
 // max-age (chrome's 400 day cap) so it outlives the browser.
 const session_cookie_fmt = cookie_name ++ "={s}; Path=/; HttpOnly; SameSite=Lax; Max-Age=34560000";
 const form_flash_cookie = "cpull_form_flash";
+const wiki_serve = @import("wiki/serve.zig");
 const local_flash_cookie = "cpull_local_flash";
 const local_required_title_prefix = "required_title:";
 const local_sync_failure_prefix = "sync:";
@@ -63,6 +64,8 @@ pub const LocalHost = struct {
     // the workspace workspace mode views, whose repo urls carry their identity
     workspace: ?*const ui.WorkspaceHost = null,
     workspace_name: ?[]const u8 = null,
+    // the workspace's root dir, for what's served from it (the wiki at /wiki/)
+    workspace_root: ?[]const u8 = null,
 
     // the repo a request's url base names: "" in plain local mode, the
     // "/<workspace>:<repo>" identity in workspace mode
@@ -302,6 +305,9 @@ fn handleRequest(
         });
         return;
     }
+
+    // the workspace wiki (src/wiki), built from the workspace's repos
+    if (host == .local) if (host.local.workspace_root) |root| if (wiki_serve.matches(path)) return wiki_serve.handle(io, allocator, request, root, path);
 
     // raw files and attachments serve bytes rather than a page, so they are
     // matched before the routable pages

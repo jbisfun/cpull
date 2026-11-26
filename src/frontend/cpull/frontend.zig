@@ -96,6 +96,7 @@ fn buildLayout(c: Ctx, chrome: Chrome) !theme.Layout {
             .{ .label = "Issues", .href = "/home/issues", .active = std.mem.eql(u8, chrome.nav, "issues") },
             .{ .label = "Patches", .href = "/home/patches", .active = std.mem.eql(u8, chrome.nav, "patches") },
             .{ .label = "Stacks", .href = "/home/stacks", .active = std.mem.eql(u8, chrome.nav, "stacks") },
+            .{ .label = "Wiki", .href = "/wiki/" },
         });
         try badges.append(aa, .{ .label = name, .icon = "boxes", .title = "pull workspace" });
         try crumbs.append(aa, .{ .label = name, .href = "/" });

@@ -140,7 +140,7 @@ pub fn build(b: *std.Build) void {
     cpull.addAnonymousImport("cpull.wasm", .{
         .root_source_file = wasm_exe.getEmittedBin(),
     });
-    addWiki(b, haxy, vin_mod, target, optimize);
+    addWiki(b, cpull, vin_mod, target, optimize);
 
     // try
     {
