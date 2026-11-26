@@ -322,7 +322,7 @@ test "SSH-2 negotiation: walk through every step (banner -> KEX -> auth -> chann
     try cw.flush();
     const v_s_line = (try cr.takeDelimiter('\n')) orelse return error.UnexpectedEof;
     const v_s = if (v_s_line.len > 0 and v_s_line[v_s_line.len - 1] == '\r') v_s_line[0 .. v_s_line.len - 1] else v_s_line;
-    try std.testing.expect(std.mem.startsWith(u8, v_s, "SSH-2.0-haxy_"));
+    try std.testing.expect(std.mem.startsWith(u8, v_s, "SSH-2.0-cpull_"));
     const v_c = client_version;
 
     // STEP 2: ALGORITHM NEGOTIATION (RFC 4253 §7.1)
@@ -439,7 +439,7 @@ test "SSH-2 negotiation: walk through every step (banner -> KEX -> auth -> chann
     // STEP 6: PUBLIC-KEY USERAUTH — PROBE (RFC 4252 §7)
     // two-trip dance. round 1: USERAUTH_REQUEST with method=publickey and
     // has_signature=false, carrying just the algo + public key blob. the
-    // server says USERAUTH_PK_OK if it would accept that key (haxy
+    // server says USERAUTH_PK_OK if it would accept that key (cpull
     // accepts any ed25519) or USERAUTH_FAILURE if not — so the client
     // doesn't waste a signature on a rejected key.
     var user_pubkey_blob: std.ArrayList(u8) = .empty;
@@ -508,7 +508,7 @@ test "SSH-2 negotiation: walk through every step (banner -> KEX -> auth -> chann
     // with its own channel id and c->s limits. each side identifies the
     // channel by *the other's* id when sending.
     //
-    // haxy supports exactly one channel per connection — a second
+    // cpull supports exactly one channel per connection — a second
     // CHANNEL_OPEN here gets CHANNEL_OPEN_FAILURE (see the failure tests).
     const client_channel_id: u32 = 42;
     {
@@ -843,7 +843,7 @@ test "auth + channel layer failure modes" {
     try std.testing.expectEqual(@as(?anyerror, error.MacVerificationFailed), server.result);
 }
 
-const client_version = "SSH-2.0-haxy_test";
+const client_version = "SSH-2.0-cpull_test";
 
 // in-memory bidirectional pipe — drives the server side of handleConnection
 // without a socket. one Pipe carries bytes in one direction.

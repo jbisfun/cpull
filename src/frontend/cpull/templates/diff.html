@@ -7,16 +7,16 @@
 {% if page.path %}<div class="small mb-2">Showing changes to <code>{{ page.path }}</code>. <a href="{{ page.all_href }}">Show all files</a></div>{% endif %}
 {% if page.empty %}{{ ui.empty(page.empty) }}{% endif %}
 {% for f in page.files %}
-<div class="card haxy-diff mb-3">
+<div class="card cpull-diff mb-3">
   <div class="card-header d-flex align-items-center gap-2">
     <code class="fw-semibold">{{ f.path }}</code>
-    <span class="badge haxy-change-{{ f.status }}">{{ f.status }}</span>
+    <span class="badge cpull-change-{{ f.status }}">{{ f.status }}</span>
     <span class="ms-auto small"><a href="{{ f.file_href }}">View file</a>{% if f.only_href %} · <a href="{{ f.only_href }}">Only this file</a>{% endif %}</span>
   </div>
   {% if f.note %}<div class="card-body small text-body-secondary">{{ f.note }}</div>{% endif %}
   {% for hunk in f.hunks %}
-  <div class="haxy-code"><table><tbody>
-  {% for l in hunk %}<tr class="{{ l.class }}"><td class="haxy-num">{{ l.number }}</td><td class="haxy-sign">{{ l.sign }}</td><td class="haxy-line">{{ l.text }}</td></tr>
+  <div class="cpull-code"><table><tbody>
+  {% for l in hunk %}<tr class="{{ l.class }}"><td class="cpull-num">{{ l.number }}</td><td class="cpull-sign">{{ l.sign }}</td><td class="cpull-line">{{ l.text }}</td></tr>
   {% endfor %}
   </tbody></table></div>
   {% endfor %}

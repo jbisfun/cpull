@@ -4,7 +4,7 @@
 {% block content %}
 {{ ui.heading("Events", "", "journal-text") }}
 <div class="tool-meta d-flex align-items-center gap-2">
-  <span>The haxy/events branch{% if page.sync_status %}: {{ page.sync_status }}{% endif %}</span>
+  <span>The cpull/events branch{% if page.sync_status %}: {{ page.sync_status }}{% endif %}</span>
   {% if page.sync_action %}<form method="post" action="{{ page.sync_action }}"><button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Sync now</button></form>{% endif %}
 </div>
 {% if page.moment is not none %}<h2 class="h5">Transaction {{ page.moment }} <a class="small fw-normal" href="{{ page.all_href }}">All events</a></h2>{% endif %}

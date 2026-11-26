@@ -1,26 +1,26 @@
-Most git forges only let you see your issues via their website, so you lose access when their server goes down. Since haxy stores issues and other project metadata in the repo itself, there's nothing stopping you from reading and editing them on your own computer. That is what local mode is for.
+Most git forges only let you see your issues via their website, so you lose access when their server goes down. Since cpull stores issues and other project metadata in the repo itself, there's nothing stopping you from reading and editing them on your own computer. That is what local mode is for.
 
 Running it
 
-* Install haxy and run it with no subcommand inside any git repo:
+* Install cpull and run it with no subcommand inside any git repo:
 
   ```
-  git clone ssh://try.haxy.net/user:project
+  git clone ssh://cpull.example.com/user:project
   cd project
-  haxy
+  cpull
   ```
 
-* The TUI opens in your terminal, showing the repo's files, commits, refs, issues, patches, and discussions. Haxy also serves the same UI on a local port, which is shown in the footer, in case you'd rather use a browser.
+* The TUI opens in your terminal, showing the repo's files, commits, refs, issues, patches, and discussions. cpull also serves the same UI on a local port, which is shown in the footer, in case you'd rather use a browser.
 
-* To skip the TUI, run `haxy --web-listen 127.0.0.1:8080`. Haxy then serves only the web UI, on exactly that address, until it's killed. Inside a pull workspace this covers the whole workspace; see [workspace.md](workspace.md).
+* To skip the TUI, run `cpull --web-listen 127.0.0.1:8080`. cpull then serves only the web UI, on exactly that address, until it's killed. Inside a pull workspace this covers the whole workspace; see [workspace.md](workspace.md).
 
-* If you cloned the repo from a haxy server, its `haxy/events` branch came along with it, so all of the project's metadata is already there. Haxy reads it straight from the remote-tracking branch, so you don't need to check anything out. It all works completely offline.
+* If you cloned the repo from a cpull server, its `cpull/events` branch came along with it, so all of the project's metadata is already there. cpull reads it straight from the remote-tracking branch, so you don't need to check anything out. It all works completely offline.
 
 Editing
 
 * You can create and edit issues, discussions, and comments just like you would on the server. You can also open a patch from one of your local branches.
 
-* Each change is committed as an event on your local `haxy/events` branch. There is no account in local mode, so the commit author comes from your `user.name` and `user.email` git config, just like your normal commits.
+* Each change is committed as an event on your local `cpull/events` branch. There is no account in local mode, so the commit author comes from your `user.name` and `user.email` git config, just like your normal commits.
 
 * None of this touches your working tree, index, or `HEAD`. The events branch is updated in the background, so you can keep working on your code while you file issues about it.
 
@@ -36,22 +36,22 @@ Syncing
 
 Making your own client
 
-* Haxy's TUI is not the only way to use this data. The events branch is just a bunch of commits, so any program that can read a git repo can build its own UI for it, whether that's an editor plugin, a GUI, or a script.
+* cpull's TUI is not the only way to use this data. The events branch is just a bunch of commits, so any program that can read a git repo can build its own UI for it, whether that's an editor plugin, a GUI, or a script.
 
-* Such a client reads the events on the `haxy/events` branch, shows them however it likes, and makes edits by committing new events to it. Read more about the [event system](event.md).
+* Such a client reads the events on the `cpull/events` branch, shows them however it likes, and makes edits by committing new events to it. Read more about the [event system](event.md).
 
-* To sync, do what haxy's sync button does:
+* To sync, do what cpull's sync button does:
 
-  1. Fetch the server's events branch with `git fetch origin +refs/heads/haxy/events:refs/remotes/origin/haxy/events`.
+  1. Fetch the server's events branch with `git fetch origin +refs/heads/cpull/events:refs/remotes/origin/cpull/events`.
 
-  2. Combine it with your local `haxy/events`. If one is an ancestor of the other, just move your local branch to the newer one. Otherwise, make a merge commit with an empty tree whose parents are your local tip and the remote tip.
+  2. Combine it with your local `cpull/events`. If one is an ancestor of the other, just move your local branch to the newer one. Otherwise, make a merge commit with an empty tree whose parents are your local tip and the remote tip.
 
-  3. Push it with `git push origin haxy/events`.
+  3. Push it with `git push origin cpull/events`.
 
 Browsing an instance
 
-* A client doesn't even need a clone. Any page on a haxy server returns JSON instead of HTML if the request has an `Accept: application/json` header. It's the same data haxy's own web UI renders from, so a client can use it to browse an instance in whatever UI it likes.
+* A client doesn't even need a clone. Any page on a cpull server returns JSON instead of HTML if the request has an `Accept: application/json` header. It's the same data cpull's own web UI renders from, so a client can use it to browse an instance in whatever UI it likes.
 
 * Pages that don't need a login can be fetched from any origin, so a web page hosted somewhere else can build a read-only client this way.
 
-* A native client can also make changes. It logs in by posting to `/login` at the end of any page's url, and keeps the session cookie it gets back. After that it can post the same forms haxy's web UI does, such as `/new`, `/edit`, or `/close` at the end of an issue's url. Each one answers with a redirect, and following it with the JSON header returns the updated page, including the error if the form failed. That's everything needed for a fully-functional client.
+* A native client can also make changes. It logs in by posting to `/login` at the end of any page's url, and keeps the session cookie it gets back. After that it can post the same forms cpull's web UI does, such as `/new`, `/edit`, or `/close` at the end of an issue's url. Each one answers with a redirect, and following it with the JSON header returns the updated page, including the error if the form failed. That's everything needed for a fully-functional client.

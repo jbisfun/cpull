@@ -185,7 +185,7 @@ pub fn render(arena: std.mem.Allocator, data: Self) ![]const u8 {
             }
         },
         .stacks => {
-            if (data.stacks.len == 0) try w.writeAll("No stacks yet. `pull haxy patch` turns work across repos into one.\n");
+            if (data.stacks.len == 0) try w.writeAll("No stacks yet. `pull cpull patch` turns work across repos into one.\n");
             for (data.stacks) |stack| {
                 try w.print("- [{s}]({s}) {s}, {d} repo{s}", .{ stack.title, stack.url, stack.status, stack.members, plural(stack.members) });
                 if (stack.conflicted_fields.len > 0) try w.print(", conflicted: {s}", .{stack.conflicted_fields});

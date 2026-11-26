@@ -23,7 +23,7 @@ const pullfile_text =
     \\</plist>
 ;
 
-// set the repo's own user.name and user.email, as `pull haxy open` pins them
+// set the repo's own user.name and user.email, as `pull cpull open` pins them
 // to pull's identity
 fn pinIdentity(io: std.Io, allocator: std.mem.Allocator, repo: *GitRepo) !void {
     try repo.addConfig(io, allocator, .{ .name = "user.name", .value = "alice" });

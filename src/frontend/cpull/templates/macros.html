@@ -1,4 +1,4 @@
-{#- haxy-specific pieces on top of theme/macros.html. -#}
+{#- cpull-specific pieces on top of theme/macros.html. -#}
 
 {#- Who wrote something: {name, href}. -#}
 {% macro person(p) -%}
@@ -7,10 +7,10 @@
 
 {#- Label chips, each filtering its list: [{label, href}]. -#}
 {% macro chips(items) -%}
-{% for l in items %}<a class="badge rounded-pill text-bg-secondary haxy-label" href="{{ l.href }}">{{ l.label }}</a> {% endfor %}
+{% for l in items %}<a class="badge rounded-pill text-bg-secondary cpull-label" href="{{ l.href }}">{{ l.label }}</a> {% endfor %}
 {%- endmacro %}
 
 {#- A status pill (open/closed/merged/draft). -#}
 {% macro status(label, ball) -%}
-{% if label %}<span class="haxy-status haxy-status-{{ ball }}">{{ label }}</span>{% endif %}
+{% if label %}<span class="cpull-status cpull-status-{{ ball }}">{{ label }}</span>{% endif %}
 {%- endmacro %}

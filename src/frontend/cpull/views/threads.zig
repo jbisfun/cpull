@@ -1,5 +1,5 @@
 // a repo's thread tabs (issues, patches, discussions): the status lists, the
-// labels, one thread with its conversation, and the forms that post to haxy's
+// labels, one thread with its conversation, and the forms that post to cpull's
 // thread routes (new, edit, comment, reply, remove, close/reopen).
 const std = @import("std");
 const ui = @import("../../../ui.zig");
@@ -41,11 +41,11 @@ pub fn panel(c: Ctx, w: *std.Io.Writer, repo: *const Repo, comptime kind: evt.Ev
     const view = @tagName(data.view);
     if (std.meta.stringToEnum(FormView, view)) |form| return formPage(c, w, repo, kind, data, form);
     if (std.mem.eql(u8, view, "labels")) return listPage(c, w, repo, kind, data, null, true);
-    // conflicts, resolve, publish and merge stay in haxy's terminal UI
+    // conflicts, resolve, publish and merge stay in cpull's terminal UI
     if (std.mem.eql(u8, view, "conflicts") or std.mem.eql(u8, view, "resolve") or std.mem.eql(u8, view, "publish") or std.mem.eql(u8, view, "merge")) {
         return fe.emit(c, w, try repo_views.chrome(c, repo, names(kind).title, &.{}), "message.html", .{
             .title = "Not in the web UI",
-            .text = "Resolving conflicts and publishing or merging patches aren't part of the themed web UI yet. Use haxy's terminal UI, or build haxy with -Dfrontend=classic.",
+            .text = "Resolving conflicts and publishing or merging patches aren't part of the themed web UI yet. Use cpull's terminal UI, or build cpull with -Dfrontend=classic.",
             .links = &[_]theme.Link{.{ .label = "All " ++ comptime names(kind).plural, .href = try firstListUrl(c, kind, data) }},
         });
     }

@@ -3,7 +3,7 @@
 {% import "macros.html" as hx %}
 {% import "report.html" as rp %}
 {% macro comment(cm) -%}
-<div class="card haxy-comment mb-2{% if cm.focused %} haxy-focused{% endif %}" id="comment-{{ cm.id }}">
+<div class="card cpull-comment mb-2{% if cm.focused %} cpull-focused{% endif %}" id="comment-{{ cm.id }}">
   <div class="card-header d-flex flex-wrap align-items-center gap-2 small">
     <i class="bi bi-person-circle text-body-secondary"></i><span class="fw-semibold">{{ hx.person(cm.author) }}</span>
     <a class="text-body-secondary" href="{{ cm.permalink }}">{{ ui.time(cm.time) }}</a>
@@ -29,7 +29,7 @@
     {% if page.remove_href %}<a class="btn btn-sm btn-outline-danger" href="{{ page.remove_href }}"><i class="bi bi-trash"></i> Remove</a>{% endif %}
   </span>
 </div>
-{% if page.conflict %}<div class="alert alert-secondary py-2">This {{ page.noun }} has a metadata conflict; resolve it in haxy's terminal UI.</div>{% endif %}
+{% if page.conflict %}<div class="alert alert-secondary py-2">This {{ page.noun }} has a metadata conflict; resolve it in cpull's terminal UI.</div>{% endif %}
 <div class="row">
   <div class="col-xl-9">
     {% if page.facts %}
@@ -41,7 +41,7 @@
     {{ comment(page.focused) }}
     <h2 class="h5 mt-3">{{ page.comment_count }} replies</h2>
     {% else %}
-    <div class="card haxy-comment mb-3">
+    <div class="card cpull-comment mb-3">
       <div class="card-header small"><i class="bi bi-person-circle text-body-secondary"></i> <span class="fw-semibold">{{ hx.person(page.author) }}</span> <span class="text-body-secondary">opened this {{ page.noun }} {{ ui.time(page.opened) }}</span></div>
       <div class="card-body">{% if page.has_description %}{{ page.description }}{% if page.more_href %}<p class="small mb-0"><a href="{{ page.more_href }}">Show the whole description</a></p>{% endif %}{% else %}<p class="text-body-secondary mb-0">No description.</p>{% endif %}</div>
     </div>

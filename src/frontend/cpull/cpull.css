@@ -1,0 +1,55 @@
+/* cpull's own rules on top of the themed tool layout (theme/assets/style.css),
+   written against the wiki's --wiki-* variables so dark mode follows. */
+
+/* Labels and status pills: Mail-style gray pills, blue/purple for states. */
+.cpull-label { font-weight: normal; text-decoration: none !important; }
+.cpull-status { display: inline-block; padding: 0.05rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; color: #fff;
+  background: linear-gradient(var(--wiki-pill-top), var(--wiki-pill-bottom)); text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25); }
+.cpull-status-open, .cpull-status-clean, .cpull-status-recent { background: linear-gradient(var(--wiki-select-top), var(--wiki-select-bottom)); }
+.cpull-status-merged { background: linear-gradient(#9b7bc7, #7b52ab); }
+.cpull-status-conflict { background: linear-gradient(#e46a6a, #c43030); }
+
+/* The path of a listing or file, in the table header / card header. */
+.cpull-path { --bs-breadcrumb-divider: '/'; font-weight: 600; }
+.cpull-files { border: 1px solid var(--bs-border-color); }
+.cpull-file > .cpull-code { border-width: 0; border-radius: 0 0 4px 4px; }
+.cpull-files .cpull-dir { color: var(--wiki-select-top); }
+
+/* Source and diff tables: a code well with a line-number gutter. */
+.cpull-code { overflow-x: auto; background: var(--wiki-code-bg); border: 1px solid var(--wiki-code-border); border-radius: 4px; }
+.card > .cpull-code { border-width: 1px 0 0; border-radius: 0; }
+.cpull-code table { border-collapse: collapse; width: 100%; font-family: var(--wiki-mono); font-size: 0.75rem; line-height: 1.45; }
+.cpull-code td { padding: 0 0.6rem; vertical-align: top; }
+.cpull-code .cpull-num { width: 1%; text-align: right; color: var(--bs-secondary-color); user-select: none; border-right: 1px solid var(--wiki-code-border); white-space: nowrap; }
+.cpull-code .cpull-num a { color: inherit; }
+.cpull-code .cpull-sign { width: 1%; color: var(--bs-secondary-color); user-select: none; padding-right: 0; }
+.cpull-code .cpull-line { white-space: pre; }
+.cpull-code tr:target { background: #fff6c8; }
+.cpull-code tr.add { background: rgba(46, 160, 67, 0.15); }
+.cpull-code tr.del { background: rgba(218, 54, 51, 0.15); }
+.cpull-change-added { background: var(--wiki-select-bottom); }
+.cpull-change-removed { background: #c43030; }
+.cpull-change-changed, .cpull-change-binary { background: var(--wiki-pill-bottom); }
+
+/* Comments: small sheets with an Aqua header strip. */
+
+
+.cpull-focused { border-color: var(--wiki-select-border); box-shadow: 0 0 0 2px rgba(44, 111, 199, 0.25); }
+.cpull-readme > .card-header { font-weight: 600; }
+
+/* Rendered markdown. */
+.cpull-prose > :last-child { margin-bottom: 0; }
+.cpull-prose pre { background: var(--wiki-code-bg); border: 1px solid var(--wiki-code-border); border-radius: 4px; padding: 0.5rem 0.75rem; font-size: 0.8rem; }
+.cpull-prose .cpull-pre { white-space: pre-wrap; font-family: var(--wiki-mono); font-size: 0.8rem; }
+.cpull-prose img { max-width: 100%; }
+
+/* Row-action icon buttons are bare glyphs: no push-button highlight line. */
+.wiki-content .btn-link { box-shadow: none; text-shadow: none; }
+
+/* cpull reports (line-anchored issues): the issue page's excerpt and the files view's flags */
+.cpull-code tr.cpull-hit, .cpull-code tr.cpull-flagged { background: rgba(255, 193, 7, 0.18); }
+.cpull-code tr.cpull-hit .cpull-num, .cpull-code tr.cpull-flagged .cpull-num { color: var(--bs-body-color); font-weight: 600; }
+.cpull-flag-icon, .cpull-flag-color { color: #d08700; }
+.cpull-flag-icon { margin-right: 0.3rem; }
+.cpull-report .card-footer code.cpull-quote { white-space: pre-wrap; }
+.cpull-report-list { margin-top: 0.35rem; }

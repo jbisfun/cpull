@@ -1,6 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const hx = @import("haxy");
+const hx = @import("cpull");
 const xit = hx.xit;
 const evt = hx.event;
 const fork = hx.fork;
@@ -146,14 +146,14 @@ fn runServer(
 
     const cwd_path = try std.process.currentPathAlloc(io, allocator);
     defer allocator.free(cwd_path);
-    const haxy_path = try std.Io.Dir.path.join(allocator, &.{ cwd_path, "zig-out/bin/haxy" });
-    defer allocator.free(haxy_path);
+    const cpull_path = try std.Io.Dir.path.join(allocator, &.{ cwd_path, "zig-out/bin/cpull" });
+    defer allocator.free(cpull_path);
 
     const web_listen_arg = std.fmt.comptimePrint("127.0.0.1:{}", .{port});
     const ssh_listen_arg = std.fmt.comptimePrint("127.0.0.1:{}", .{port + 1});
 
     const process = try std.process.spawn(io, .{
-        .argv = &.{ haxy_path, "serve", "--web-listen", web_listen_arg, "--ssh-listen", ssh_listen_arg, "--data-dir", temp_path },
+        .argv = &.{ cpull_path, "serve", "--web-listen", web_listen_arg, "--ssh-listen", ssh_listen_arg, "--data-dir", temp_path },
         .stdin = .ignore,
         .stdout = .ignore,
         .stderr = .ignore,
@@ -632,7 +632,7 @@ fn testPushFork(
         defer user_repo.deinit(io, allocator);
         var target = try rp.Repo(.xit, repo_opts).open(io, allocator, .{ .path = target_path });
         defer target.deinit(io, allocator);
-        // pushing a draft does not create haxy state or a mergeability cache
+        // pushing a draft does not create cpull state or a mergeability cache
         try std.testing.expectError(error.NotFound, evt.currentMoment(repo_opts, &target));
         try std.testing.expectEqual(null, try (try target.core.latestMoment()).getCursor(hash.hashInt(hash_kind, evt.Patch.patch_id_to_mergeability_key)));
         try target.addBranch(io, .{ .name = "feature" });
@@ -1012,7 +1012,7 @@ fn testPushEvents(
     const events_to_push = [_]evt.EventWithId{
         .{
             .id = std.fmt.bytesToHex(issue_event_id, .lower),
-            .author = .{ .name = "haxy", .email = "user@haxy" },
+            .author = .{ .name = "cpull", .email = "user@cpull" },
             .event = .{
                 .issue = .{
                     .title = "Login form clears password on validation error",
@@ -1029,7 +1029,7 @@ fn testPushEvents(
         io,
         allocator,
         "origin",
-        "haxy/events",
+        "cpull/events",
         false,
         .{ .wire = .{ .ssh = .{
             .command = ssh_cmd_maybe,
@@ -1056,7 +1056,7 @@ fn testPushEvents(
     const events_to_push2 = [_]evt.EventWithId{
         .{
             .id = std.fmt.bytesToHex(issue_event_id, .lower),
-            .author = .{ .name = "haxy", .email = "user@haxy" },
+            .author = .{ .name = "cpull", .email = "user@cpull" },
             .event = .{
                 .issue = .{
                     .title = "Login form clears password on validation error",
@@ -1073,7 +1073,7 @@ fn testPushEvents(
         io,
         allocator,
         "origin",
-        "haxy/events",
+        "cpull/events",
         false,
         .{ .wire = .{ .ssh = .{
             .command = ssh_cmd_maybe,
@@ -1101,7 +1101,7 @@ fn testPushEvents(
     const stack_members = "core 0123456789abcdef0123456789abcdef\ngroup/app fedcba9876543210fedcba9876543210";
     const events_to_push3 = [_]evt.EventWithId{.{
         .id = std.fmt.bytesToHex(stack_event_id, .lower),
-        .author = .{ .name = "haxy", .email = "user@haxy" },
+        .author = .{ .name = "cpull", .email = "user@cpull" },
         .event = .{ .stack = .{ .title = "rename the api", .description = "", .labels = "api", .members = stack_members } },
     }};
     try evt.consume(.local, .repo, repo_kind, .{ .hash = hash_kind, .is_test = true }, io, allocator, &client_repo, evt.events_ref, &events_to_push3);
@@ -1109,7 +1109,7 @@ fn testPushEvents(
         io,
         allocator,
         "origin",
-        "haxy/events",
+        "cpull/events",
         false,
         .{ .wire = .{ .ssh = .{
             .command = ssh_cmd_maybe,
@@ -1717,7 +1717,7 @@ fn testPushClearUndo(
 
     // the clear ref can only be deleted
     {
-        const result = try gitPush(io, allocator, client_path, ssh_config_arg, &.{"master:refs/haxy/undo"});
+        const result = try gitPush(io, allocator, client_path, ssh_config_arg, &.{"master:refs/cpull/undo"});
         defer allocator.free(result.stderr);
         try std.testing.expect(!result.ok);
         try std.testing.expect(std.mem.indexOf(u8, result.stderr, "can only be deleted") != null);
@@ -1725,7 +1725,7 @@ fn testPushClearUndo(
 
     // and only alone, refusing the whole push
     {
-        const result = try gitPush(io, allocator, client_path, ssh_config_arg, &.{ "master:refs/heads/other", ":refs/haxy/undo" });
+        const result = try gitPush(io, allocator, client_path, ssh_config_arg, &.{ "master:refs/heads/other", ":refs/cpull/undo" });
         defer allocator.free(result.stderr);
         try std.testing.expect(!result.ok);
         try std.testing.expect(std.mem.indexOf(u8, result.stderr, "must be deleted alone") != null);
@@ -1735,7 +1735,7 @@ fn testPushClearUndo(
     try std.testing.expectEqual(pushed_count, try historyCount(repo_opts, io, allocator, server_path));
 
     {
-        const result = try gitPush(io, allocator, client_path, ssh_config_arg, &.{":refs/haxy/undo"});
+        const result = try gitPush(io, allocator, client_path, ssh_config_arg, &.{":refs/cpull/undo"});
         defer allocator.free(result.stderr);
         try std.testing.expect(result.ok);
         try std.testing.expect(std.mem.indexOf(u8, result.stderr, "Compacting database") != null);
@@ -1802,8 +1802,8 @@ fn setupAdmin(io: std.Io, allocator: std.mem.Allocator, data_path: []const u8) !
     var repo = try rp.Repo(.xit, evt.admin_repo_opts).init(io, allocator, .{ .bare = true, .path = admin_repo_path });
     defer repo.deinit(io, allocator);
 
-    try repo.addConfig(io, allocator, .{ .name = "user.name", .value = "haxy" });
-    try repo.addConfig(io, allocator, .{ .name = "user.email", .value = "admin@haxy" });
+    try repo.addConfig(io, allocator, .{ .name = "user.name", .value = "cpull" });
+    try repo.addConfig(io, allocator, .{ .name = "user.email", .value = "admin@cpull" });
 
     var prng = std.Random.DefaultPrng.init(std.testing.random_seed);
     const user_id = evt.EventWithId.randomId(prng.random());
@@ -1873,8 +1873,8 @@ fn remoteUrl(
     };
 }
 
-// the ssh command the haxy git client should invoke, or null when not using
-// ssh. haxy generates a fresh host key on every run, so accept the unknown host
+// the ssh command the cpull git client should invoke, or null when not using
+// ssh. cpull generates a fresh host key on every run, so accept the unknown host
 // and skip writing to known_hosts.
 fn sshCommand(
     is_ssh: bool,

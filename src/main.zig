@@ -6,14 +6,15 @@ const srv = @import("./serve.zig");
 const ui = @import("./ui.zig");
 const web = @import("./web.zig");
 const ws = @import("./workspace.zig");
+const evt = @import("./event.zig");
 
 // cook the terminal before a panic/segfault trace is printed, so the trace
 // isn't mangled by raw mode and the alternate buffer
 pub const std_options_debug_io = xit.xitui.terminal.crash_debug_io;
 
 // the web UI: the jbisfun wiki theme (src/frontend), unless built with
-// -Dfrontend=classic, which keeps haxy's own terminal-grid web UI
-pub const haxy_frontend: web.Frontend = if (@import("frontend_options").themed) @import("frontend/haxy/frontend.zig").frontend else .{};
+// -Dfrontend=classic, which keeps cpull's own terminal-grid web UI
+pub const cpull_frontend: web.Frontend = if (@import("frontend_options").themed) @import("frontend/cpull/frontend.zig").frontend else .{};
 
 pub const RunOpts = struct {
     out: *std.Io.Writer,
@@ -135,6 +136,9 @@ pub fn run(
                 try std.Io.Dir.path.resolve(session_arena.allocator(), &.{ cwd_path, arg })
             else
                 try ws.detect(io, session_arena.allocator(), cwd_path, if (found) |f| f.path else null);
+
+            // a repo still on haxy's events branch moves to cpull's
+            if (found) |f| if (f.repo_kind == .git) evt.adoptLegacyAt(io, allocator, f.path);
 
             var workspace: ?*ws.Workspace = null;
             if (workspace_root) |root| {

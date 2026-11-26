@@ -1,6 +1,6 @@
-// the parts of a pull workspace's pullfile.plist haxy reads: the repo list and
-// the `haxy` section. pull (github.com/jbisfun/pull) owns the file and writes
-// it; haxy only reads it, with the same xml package pull parses it with.
+// the parts of a pull workspace's pullfile.plist cpull reads: the repo list and
+// the `cpull` section. pull (github.com/jbisfun/pull) owns the file and writes
+// it; cpull only reads it, with the same xml package pull parses it with.
 const std = @import("std");
 const xml = @import("xml");
 
@@ -17,7 +17,7 @@ pub const Repo = struct {
 
 pub const Pullfile = struct {
     repos: []const Repo,
-    // the pullfile `haxy` section's `events`: the repo whose haxy/events holds
+    // the pullfile `cpull` section's `events`: the repo whose cpull/events holds
     // the workspace's own issues and stacks, when the root isn't a git repo
     events_repo: ?[]const u8 = null,
 };
@@ -62,7 +62,9 @@ pub fn parse(arena: std.mem.Allocator, data: []const u8) Error!Pullfile {
             });
         }
     }
-    const events_repo = if (root.get("haxy")) |section| Value.str(section.get("events")) else null;
+    // `haxy`: the section's name before the fork was renamed to cpull
+    const section = root.get("cpull") orelse root.get("haxy");
+    const events_repo = if (section) |sec| Value.str(sec.get("events")) else null;
     return .{ .repos = repos.items, .events_repo = events_repo };
 }
 
@@ -150,7 +152,7 @@ pub fn load(io: std.Io, arena: std.mem.Allocator, root: []const u8) !Pullfile {
     return parse(arena, data);
 }
 
-test "pullfile repos and haxy section" {
+test "pullfile repos and cpull section" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const pf = try parse(arena.allocator(),
@@ -174,7 +176,7 @@ test "pullfile repos and haxy section" {
         \\        <key>postcommit</key>
         \\        <array/>
         \\    </dict>
-        \\    <key>haxy</key>
+        \\    <key>cpull</key>
         \\    <dict>
         \\        <key>events</key>
         \\        <string>dotenv</string>
@@ -215,4 +217,13 @@ test "pullfile repos and haxy section" {
     try std.testing.expectEqual(null, pf.repos[1].commit);
     try std.testing.expectEqualStrings("dotenv", pf.events_repo.?);
     try std.testing.expectError(error.InvalidPlist, parse(arena.allocator(), "<plist><array/></plist>"));
+}
+
+test "pullfile haxy section (before the rename) still names the events repo" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const pf = try parse(arena.allocator(),
+        \\<plist version="1.0"><dict><key>haxy</key><dict><key>events</key><string>dotenv</string></dict><key>repos</key><array/></dict></plist>
+    );
+    try std.testing.expectEqualStrings("dotenv", pf.events_repo.?);
 }
