@@ -1,10 +1,12 @@
-// `cpull report`: line-anchored issues (src/report/) over a scratch pull workspace
+// reports: line-anchored issues (src/report/), filed the way cpull's /api
+// files them for radar, over a scratch pull workspace
 const std = @import("std");
 const xit = @import("xit");
 const rp = xit.repo;
 const evt = @import("../event.zig");
 const ws = @import("../workspace.zig");
 const report = @import("../report/report.zig");
+const forge = @import("../forge.zig");
 const anchor = @import("../report/anchor.zig");
 
 const GitRepo = rp.Repo(.git, .{});
@@ -51,7 +53,7 @@ test "an issue without an anchor serializes as before" {
     try std.testing.expectEqual(null, parsed_plain.value.anchor);
 }
 
-test "cpull report files, lists, closes and migrates" {
+test "anchored issues file, list, close and keep their id" {
     const io = std.testing.io;
     const allocator = std.testing.allocator;
     var temp = std.testing.tmpDir(.{});
@@ -89,37 +91,47 @@ test "cpull report files, lists, closes and migrates" {
     }
 
     const workspace = try ws.Workspace.load(io, allocator, aa, root, config_path);
+    const core = workspace.byName("core").?;
 
-    // filing reads the line and records the head commit, which holds it
-    const filed = try report.add(workspace, &arena, .{ .repo = "core", .file = "./src/a.zig", .line = 2, .quote = " b = 2 ", .note = "b is wrong\nbecause" });
-    try std.testing.expectEqualStrings("src/a.zig", filed.file);
-    try std.testing.expectEqualStrings("const b = 2;", filed.line_text);
-    try std.testing.expectEqualStrings("b = 2", filed.quote.?);
-    try std.testing.expectEqualStrings("b is wrong", filed.title);
-    try std.testing.expect(filed.commit != null);
-    try std.testing.expectError(error.NoSuchLine, report.add(workspace, &arena, .{ .repo = "core", .file = "src/a.zig", .line = 4 }));
-    try std.testing.expectError(error.OutsideRepo, report.add(workspace, &arena, .{ .repo = "core", .file = "../pullfile.plist", .line = 1 }));
-    try std.testing.expectError(error.RepoNotFound, report.add(workspace, &arena, .{ .repo = "nope", .file = "a", .line = 1 }));
+    // filed with an anchor (radar read the line and the commit), as POST /api/issues does
+    const head = blk: {
+        var repo = try GitRepo.open(io, allocator, .{ .path = core.path });
+        defer repo.deinit(io, allocator);
+        var buf: [xit.ref.MAX_REF_CONTENT_SIZE]u8 = undefined;
+        const ref = (try repo.head(io, &buf)).ref;
+        break :blk (try repo.readRef(io, ref)).?;
+    };
+    const id = try forge.fileIssueWith(workspace, core, .{
+        .title = "b is wrong",
+        .description = "b is wrong\nbecause",
+        .labels = "report",
+        .anchor = .{ .file = "src/a.zig", .line = 2, .line_text = "const b = 2;", .quote = "b = 2", .commit = &head, .source = "cli" },
+    });
     // "." files into the events repo, here the workspace root
-    _ = try report.add(workspace, &arena, .{ .repo = ".", .file = "pullfile.plist", .line = 1 });
+    _ = try forge.fileIssueWith(workspace, try report.resolveRepo(workspace, "."), .{ .title = "pullfile.plist:1", .labels = "report", .anchor = .{ .file = "pullfile.plist", .line = 1, .line_text = "<?xml" } });
+    // an unanchored issue isn't a report
+    _ = try forge.fileIssue(workspace, core, "plain", "", "");
 
     {
         const open = try report.list(workspace, &arena, false);
         try std.testing.expectEqual(2, open.len);
-        const found = try report.find(workspace, &arena, filed.id[0..6]);
+        const found = try report.find(workspace, &arena, id[0..6]);
         try std.testing.expectEqualStrings("core", found.repo);
         try std.testing.expectEqualStrings("b is wrong\nbecause", found.note.?);
+        try std.testing.expectEqualStrings("b = 2", found.quote.?);
         try std.testing.expectEqualStrings("alice@example.test", found.author.?);
+        const issue = try forge.findIssue(workspace, &arena, core, id[0..8]);
+        try std.testing.expectEqual(@as(u64, 2), issue.anchor.?.line);
     }
 
     // the excerpt and the file markers the web ui shows
     {
-        var repo = try GitRepo.open(io, allocator, .{ .path = try std.Io.Dir.path.join(aa, &.{ root, "core" }) });
+        var repo = try GitRepo.open(io, allocator, .{ .path = core.path });
         defer repo.deinit(io, allocator);
         const markers = try anchor.fileAnchors(.git, .{}, &repo, io, &arena, "src");
         try std.testing.expectEqual(1, markers.len);
         try std.testing.expectEqual(@as(u64, 2), markers[0].line);
-        const ex = (try anchor.excerpt(.git, .{}, &repo, io, &arena, .{ .file = "src/a.zig", .line = 2, .line_text = "const b = 2;", .commit = filed.commit })).?;
+        const ex = (try anchor.excerpt(.git, .{}, &repo, io, &arena, .{ .file = "src/a.zig", .line = 2, .line_text = "const b = 2;", .commit = &head })).?;
         try std.testing.expect(ex.at_filed_commit);
         try std.testing.expectEqual(@as(u64, 1), ex.first);
         try std.testing.expectEqual(3, ex.lines.len);
@@ -129,39 +141,21 @@ test "cpull report files, lists, closes and migrates" {
         try std.testing.expect(!moved.changed);
     }
 
-    _ = try report.setStatus(workspace, &arena, filed.id, .closed);
+    // close with a comment, then the comments read back
+    try forge.commentIssue(workspace, core, &id, "fixed", .closed);
     try std.testing.expectEqual(1, (try report.list(workspace, &arena, false)).len);
     try std.testing.expectEqual(2, (try report.list(workspace, &arena, true)).len);
+    const comments = try forge.comments(workspace, &arena, core, &id);
+    try std.testing.expectEqual(1, comments.len);
+    try std.testing.expectEqualStrings("fixed", comments[0].body);
+    try forge.setIssueStatus(workspace, core, &id, .open);
+    try std.testing.expectEqual(2, (try report.list(workspace, &arena, false)).len);
 
-    // migrating radar's json: once, then skipped
-    {
-        const f = try temp.dir.createFile(io, "radar.json", .{});
-        defer f.close(io);
-        try f.writeStreamingAll(io,
-            \\[{"number":1,"repo":"core","file":"src/a.zig","line":1,"line_text":"const a = 1;","quote":null,"note":"a note","status":"open","source":"wiki","created":"2030-01-01T00:00:00Z"},
-            \\ {"number":2,"repo":"core","file":"src/a.zig","line":3,"line_text":"fn main() void {}","quote":"main","note":null,"status":"closed","source":"cli","created":"2030-01-02T00:00:00.5Z"},
-            \\ {"number":3,"repo":"gone","file":"x","line":1,"line_text":"","status":"open","created":"2030-01-02T00:00:00Z"}]
-        );
-    }
-    const radar_path = try std.Io.Dir.path.join(aa, &.{ root, "radar.json" });
-    var out: std.Io.Writer.Allocating = .init(allocator);
-    defer out.deinit();
-    var err: std.Io.Writer.Allocating = .init(allocator);
-    defer err.deinit();
-    try report.run(io, allocator, root, .{ .action = .migrate, .args = &.{radar_path} }, config_path, &out.writer, &err.writer);
-    try std.testing.expect(std.mem.indexOf(u8, out.written(), "migrated 2 of 3 radar reports (1 open, 1 closed); 0 already present, 1 in unknown repos") != null);
-    out.clearRetainingCapacity();
-    try report.run(io, allocator, root, .{ .action = .migrate, .args = &.{radar_path} }, config_path, &out.writer, &err.writer);
-    try std.testing.expect(std.mem.indexOf(u8, out.written(), "migrated 0 of 3 radar reports (0 open, 0 closed); 2 already present") != null);
-
-    const all = try report.list(workspace, &arena, true);
-    try std.testing.expectEqual(4, all.len);
-    var migrated: usize = 0;
-    for (all) |r| if (std.mem.eql(u8, r.source, "wiki") or (std.mem.eql(u8, r.source, "cli") and r.quote != null and std.mem.eql(u8, r.quote.?, "main"))) {
-        migrated += 1;
-        // the radar filing time is kept, and the commit holding the line is found
-        try std.testing.expect(r.created_timestamp >= 1893456000);
-        try std.testing.expect(r.commit != null);
-    };
-    try std.testing.expectEqual(2, migrated);
+    // a given id and time (a migration): once, then refused
+    const given = "00112233445566778899aabbccddeeff".*;
+    _ = try forge.fileIssueWith(workspace, core, .{ .title = "migrated", .labels = "report radar", .status = .closed, .id = given, .timestamp = 1893456000, .anchor = .{ .file = "src/a.zig", .line = 1, .line_text = "const a = 1;" } });
+    try std.testing.expectError(error.IssueExists, forge.fileIssueWith(workspace, core, .{ .title = "migrated", .id = given }));
+    const migrated = try report.find(workspace, &arena, "001122");
+    try std.testing.expectEqualStrings("closed", migrated.status);
+    try std.testing.expectEqual(@as(u64, 1893456000), migrated.created_timestamp);
 }

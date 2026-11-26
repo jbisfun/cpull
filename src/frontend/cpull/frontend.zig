@@ -16,7 +16,7 @@ const repo_views = @import("views/repo.zig");
 const site_views = @import("views/site.zig");
 const fork_views = @import("views/fork.zig");
 const highlight = @import("highlight");
-const integrate = @import("../../integrate/integrate.zig");
+const tools = @import("../../tools/tools.zig");
 
 pub const site_name = "cpull";
 
@@ -66,7 +66,9 @@ pub const templates = [_]theme.Template{
 pub fn render(allocator: std.mem.Allocator, page: *const ui.Page, session: *const ui.Session.Data, writer: *std.Io.Writer) anyerror!void {
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    const c: Ctx = .{ .gpa = allocator, .arena = &arena, .session = session };
+    var tools_render = tools.view.Render.init(&arena);
+    defer tools_render.deinit();
+    const c: Ctx = .{ .gpa = allocator, .arena = &arena, .session = session, .tools = &tools_render };
     switch (page.*) {
         .workspace => |*data| try workspace_views.page(c, writer, data),
         .repo => |*data| try repo_views.page(c, writer, data),
@@ -95,8 +97,7 @@ pub fn emit(c: Ctx, w: *std.Io.Writer, chrome: Chrome, template: []const u8, dat
     try theme.render(&templates, c.gpa, c.aa(), template, .{ .layout = layout, .page = data }, w);
 }
 
-// the workspace server's own items in the global bar, shared with the
-// features mounted beside haxy's pages (src/ci); `active` names the current item
+// the workspace server's own items in the global bar; `active` names the current item
 pub fn workspaceNav(aa: std.mem.Allocator, active: []const u8) ![]const theme.Link {
     const items = [_]struct { label: []const u8, href: []const u8, key: []const u8 }{
         .{ .label = "Repositories", .href = "/", .key = "home" },
@@ -110,16 +111,11 @@ pub fn workspaceNav(aa: std.mem.Allocator, active: []const u8) ![]const theme.Li
 }
 
 // the workspace tool switcher (theme.toolNav) on the workspace server's
-// pages, `active` being the tool rendering them. The CI and the wiki are
-// still mounted in this server (/ci, /wiki/), so they link there; the other
-// tools are found by their serve.addr when the server knows its workspace.
+// pages: cpull is this server, the CI, the wiki and radar are found by
+// their serve.addr (discovery), linked when running and dimmed when not
 pub fn workspaceTools(aa: std.mem.Allocator, active: theme.Tool) ![]const theme.ToolLink {
-    const mounted = [_]theme.Mount{
-        .{ .tool = .cpull, .base = "/" },
-        .{ .tool = .idlci, .base = "/ci" },
-        .{ .tool = .wiki, .base = "/wiki/" },
-    };
-    if (integrate.workspace) |ws| if (theme.workspaceTools(ws.io, aa, ws.root, active, &mounted)) |tools| return tools else |_| {};
+    const mounted = [_]theme.Mount{.{ .tool = .cpull, .base = "/" }};
+    if (tools.workspace) |ws| if (theme.workspaceTools(ws.io, aa, ws.root, active, &mounted)) |list| return list else |_| {};
     var found: theme.discovery.Found = .initFill(null);
     for (mounted) |m| found.set(m.tool, m.base);
     return theme.toolNav(aa, found, active);
@@ -133,9 +129,9 @@ fn buildLayout(c: Ctx, chrome: Chrome) !theme.Layout {
     var footer: std.ArrayList(theme.Link) = .empty;
     var flashes: std.ArrayList(theme.Flash) = .empty;
 
-    var tools: []const theme.ToolLink = &.{};
+    var tool_links: []const theme.ToolLink = &.{};
     if (c.workspace()) |name| {
-        tools = try workspaceTools(aa, .cpull);
+        tool_links = try workspaceTools(aa, .cpull);
         try nav.appendSlice(aa, try workspaceNav(aa, chrome.nav));
         try badges.append(aa, .{ .label = name, .icon = "boxes", .title = "pull workspace" });
         try crumbs.append(aa, .{ .label = name, .href = "/" });
@@ -164,7 +160,7 @@ fn buildLayout(c: Ctx, chrome: Chrome) !theme.Layout {
     return .{
         .title = try c.print("{s} · {s}", .{ chrome.title, site_name }),
         .site = site_name,
-        .tools = tools,
+        .tools = tool_links,
         .nav = nav.items,
         .badges = badges.items,
         .crumbs = crumbs.items,

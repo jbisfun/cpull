@@ -1,16 +1,17 @@
-// the forge reads and writes the CI integration needs, over one workspace
-// repo's cpull events: patch and issue lookups by id or prefix, an index of a
-// repo's issues for linking `#id` mentions, and filing, commenting on,
-// closing and reopening issues as pull's identity (the repo's local
-// user.name/user.email, which `pull cpull open` pins; without it writes fail
-// with error.NoPullIdentity, like every workspace write).
+// the forge reads and writes cpull's /api (api.zig) and its integration with
+// the workspace's other tools (src/tools) need, over one workspace repo's
+// cpull events: patch and issue lookups by id or prefix, an issue's comments,
+// an index of a repo's issues for linking `#id` mentions, and filing,
+// commenting on, closing and reopening issues as pull's identity (the repo's
+// local user.name/user.email, which `pull cpull open` pins; without it writes
+// fail with error.NoPullIdentity, like every workspace write).
 const std = @import("std");
 const xit = @import("xit");
 const rp = xit.repo;
 const hash = xit.hash;
-const evt = @import("../event.zig");
-const ui = @import("../ui.zig");
-const ws_mod = @import("../workspace.zig");
+const evt = @import("event.zig");
+const ui = @import("ui.zig");
+const ws_mod = @import("workspace.zig");
 const Workspace = ws_mod.Workspace;
 const Repo = ws_mod.Repo;
 
@@ -31,6 +32,40 @@ pub const IssueInfo = struct {
     description: []const u8,
     labels: []const u8,
     status: evt.Issue.Status,
+    author: ?[]const u8 = null,
+    created_timestamp: u64 = 0,
+    anchor: ?evt.Issue.Anchor = null,
+};
+
+// what the issue readers take of a record
+const IssueSubset = struct {
+    removed: bool,
+    author_email: ?[]const u8,
+    created_timestamp: u64,
+    event: struct { title: []const u8, description: []const u8, labels: []const u8, status: evt.Issue.Status, anchor: ?evt.Issue.Anchor },
+};
+
+fn issueInfo(hex: []const u8, rec: IssueSubset) IssueInfo {
+    return .{
+        .id = hex,
+        .title = rec.event.title,
+        .description = rec.event.description,
+        .labels = rec.event.labels,
+        .status = rec.event.status,
+        .author = rec.author_email,
+        .created_timestamp = rec.created_timestamp,
+        .anchor = rec.event.anchor,
+    };
+}
+
+pub const CommentInfo = struct {
+    id: []const u8,
+    parent_id: []const u8,
+    body: []const u8,
+    author: ?[]const u8,
+    created_timestamp: u64,
+    // the order cpull recorded it in (ties within one second)
+    created_order: u64 = 0,
 };
 
 // every repo issues can live in: the root events repo, then the pullfile's
@@ -123,15 +158,9 @@ pub fn issues(ws: *const Workspace, arena: *std.heap.ArenaAllocator, repo: Repo)
             var ids: std.ArrayList([evt.event_id_size]u8) = .empty;
             for ([_][]const u8{ "open", "closed" }) |status| try statusIds(DB, opts.hash, moment, args.arena, evt.Issue.status_to_id_set_key, status, &ids);
             for (ids.items) |id| {
-                const rec = (try evt.readRecordSubset(evt.Issue, struct { removed: bool, event: struct { title: []const u8, description: []const u8, labels: []const u8, status: evt.Issue.Status } }, DB, opts.hash, moment, args.arena, &id)) orelse continue;
+                const rec = (try evt.readRecordSubset(evt.Issue, IssueSubset, DB, opts.hash, moment, args.arena, &id)) orelse continue;
                 if (rec.removed) continue;
-                try args.out.append(aa, .{
-                    .id = try aa.dupe(u8, &std.fmt.bytesToHex(id, .lower)),
-                    .title = rec.event.title,
-                    .description = rec.event.description,
-                    .labels = rec.event.labels,
-                    .status = rec.event.status,
-                });
+                try args.out.append(aa, issueInfo(try aa.dupe(u8, &std.fmt.bytesToHex(id, .lower)), rec));
             }
         }
     }.run, .{ .arena = arena, .out = &out }) catch |e| switch (e) {
@@ -166,20 +195,123 @@ pub fn patchUrl(ws: *const Workspace, arena: *std.heap.ArenaAllocator, repo: Rep
 
 // file an issue; returns its id
 pub fn fileIssue(ws: *const Workspace, repo: Repo, title: []const u8, description: []const u8, labels: []const u8) ![id_len]u8 {
-    var id_bytes: [evt.event_id_size]u8 = undefined;
-    ws.io.random(&id_bytes);
-    const id = std.fmt.bytesToHex(id_bytes, .lower);
+    return fileIssueWith(ws, repo, .{ .title = title, .description = description, .labels = labels });
+}
+
+pub const NewIssue = struct {
+    title: []const u8,
+    description: []const u8 = "",
+    labels: []const u8 = "",
+    anchor: ?evt.Issue.Anchor = null,
+    status: evt.Issue.Status = .open,
+    // a given id (a migration re-filing the same report) and filing time
+    id: ?[id_len]u8 = null,
+    timestamp: ?u64 = null,
+};
+
+// file an issue, maybe anchored; returns its id. error.IssueExists when `id` is taken
+pub fn fileIssueWith(ws: *const Workspace, repo: Repo, new: NewIssue) ![id_len]u8 {
+    if (!evt.titleValid(new.title)) return error.InvalidTitle;
+    const id = new.id orelse blk: {
+        var id_bytes: [evt.event_id_size]u8 = undefined;
+        ws.io.random(&id_bytes);
+        break :blk std.fmt.bytesToHex(id_bytes, .lower);
+    };
     try ws_mod.withRepo(ws, repo, true, struct {
         fn run(comptime opts: rp.RepoOpts(.git), w: *const Workspace, r: *rp.Repo(.git, opts), author: evt.CommitAuthor, args: anytype) !void {
+            if (args.new.id != null) {
+                try evt.consume(.local, .repo, .git, opts, w.io, w.gpa, r, evt.events_ref, &.{});
+                if (try exists(opts, w, r, args.id)) return error.IssueExists;
+            }
             try evt.consume(.local, .repo, .git, opts, w.io, w.gpa, r, evt.events_ref, &.{.{
-                .id = args.id,
-                .timestamp = @intCast(std.Io.Timestamp.now(w.io, .real).toSeconds()),
+                .id = args.id.*,
+                .timestamp = args.new.timestamp orelse @intCast(std.Io.Timestamp.now(w.io, .real).toSeconds()),
                 .author = author,
-                .event = .{ .issue = .{ .title = args.title, .description = args.description, .labels = args.labels } },
+                .event = .{ .issue = .{ .title = args.new.title, .description = args.new.description, .labels = args.new.labels, .status = args.new.status, .anchor = args.new.anchor } },
             }});
         }
-    }.run, .{ .id = id, .title = title, .description = description, .labels = labels });
+    }.run, .{ .id = &id, .new = new });
     return id;
+}
+
+fn exists(comptime opts: rp.RepoOpts(.git), w: *const Workspace, r: *rp.Repo(.git, opts), id: *const [id_len]u8) !bool {
+    var arena = std.heap.ArenaAllocator.init(w.gpa);
+    defer arena.deinit();
+    var db = (try evt.LocalEventDB(opts.hash).openReadOnly(w.io, w.gpa, r.core.repo_dir)) orelse return false;
+    defer db.deinit(w.io, w.gpa);
+    const moment = evt.currentMomentFromDb(opts.hash, db.db) catch return false;
+    const bytes = try evt.parseEventId(id);
+    return null != try evt.readRecordSubset(evt.Issue, struct { removed: bool }, evt.EventDB(opts.hash), opts.hash, moment, &arena, &bytes);
+}
+
+// the one issue of a repo whose id is or starts with `prefix` (6+ hex digits)
+pub fn findIssue(ws: *const Workspace, arena: *std.heap.ArenaAllocator, repo: Repo, prefix: []const u8) !IssueInfo {
+    const want = std.mem.trimStart(u8, prefix, "#");
+    if (want.len < 6) return error.IdTooShort;
+    return matchIssue(try issues(ws, arena, repo), want) orelse {
+        var n: usize = 0;
+        for (try issues(ws, arena, repo)) |i| if (std.mem.startsWith(u8, i.id, want)) {
+            n += 1;
+        };
+        return if (n > 1) error.AmbiguousId else error.IssueNotFound;
+    };
+}
+
+// the comments of thread `thread_id` (a full id), oldest first
+pub fn comments(ws: *const Workspace, arena: *std.heap.ArenaAllocator, repo: Repo, thread_id: []const u8) ![]CommentInfo {
+    var out: std.ArrayList(CommentInfo) = .empty;
+    ws_mod.withRepo(ws, repo, false, struct {
+        fn run(comptime opts: rp.RepoOpts(.git), w: *const Workspace, r: *rp.Repo(.git, opts), _: evt.CommitAuthor, args: anytype) !void {
+            const aa = args.arena.allocator();
+            try evt.consume(.local, .repo, .git, opts, w.io, w.gpa, r, evt.events_ref, &.{});
+            var db = (try evt.LocalEventDB(opts.hash).openReadOnly(w.io, w.gpa, r.core.repo_dir)) orelse return;
+            defer db.deinit(w.io, w.gpa);
+            const moment = evt.currentMomentFromDb(opts.hash, db.db) catch return;
+            const DB = evt.EventDB(opts.hash);
+            const ids_cursor = try moment.getCursor(hash.hashInt(opts.hash, evt.Comment.all_id_set_key)) orelse return;
+            const records_cursor = try moment.getCursor(hash.hashInt(opts.hash, evt.Comment.record_map_key)) orelse return;
+            const ids = try DB.SortedSet(.read_only).init(ids_cursor);
+            const records = try DB.HashMap(.read_only).init(records_cursor);
+            var iter = try ids.iteratorFromIndex(0);
+            while (try iter.next()) |cursor| {
+                const id = try evt.readOrderKeyId(DB, cursor);
+                const record_cursor = try records.getCursor(hash.hashInt(opts.hash, &id)) orelse continue;
+                const record = try evt.read(evt.Comment.Record, DB, opts.hash, args.arena, try DB.HashMap(.read_only).init(record_cursor));
+                if (record.removed) continue;
+                if (!std.mem.eql(u8, &record.event.thread_id, args.thread_id)) continue;
+                try args.out.append(aa, .{
+                    .id = try aa.dupe(u8, &std.fmt.bytesToHex(id, .lower)),
+                    .parent_id = try aa.dupe(u8, &record.event.parent_id),
+                    .body = record.event.body,
+                    .author = record.author_email,
+                    .created_timestamp = record.created_timestamp,
+                    .created_order = record.created_order,
+                });
+            }
+        }
+    }.run, .{ .arena = arena, .thread_id = thread_id, .out = &out }) catch |e| switch (e) {
+        error.RepoNotFound, error.FileNotFound, error.NotDir => return out.items,
+        else => return e,
+    };
+    std.mem.sort(CommentInfo, out.items, {}, struct {
+        fn lt(_: void, x: CommentInfo, y: CommentInfo) bool {
+            if (x.created_timestamp != y.created_timestamp) return x.created_timestamp < y.created_timestamp;
+            if (x.created_order != y.created_order) return x.created_order < y.created_order;
+            return std.mem.lessThan(u8, x.id, y.id);
+        }
+    }.lt);
+    return out.items;
+}
+
+// change an issue's status without a comment
+pub fn setIssueStatus(ws: *const Workspace, repo: Repo, id: []const u8, status: evt.Issue.Status) !void {
+    const id_bytes = try evt.parseEventId(id);
+    try ws_mod.withRepo(ws, repo, true, struct {
+        fn run(comptime opts: rp.RepoOpts(.git), w: *const Workspace, r: *rp.Repo(.git, opts), author: evt.CommitAuthor, args: anytype) !void {
+            try evt.consume(.local, .repo, .git, opts, w.io, w.gpa, r, evt.events_ref, &.{});
+            try evt.Issue.update(.local, .git, opts, w.io, w.gpa, r, args.id, .{ .status = args.status }, author);
+        }
+    }.run, .{ .id = &id_bytes, .status = status });
 }
 
 // the issue `id` (a full id), or null
@@ -192,9 +324,9 @@ pub fn readIssue(ws: *const Workspace, arena: *std.heap.ArenaAllocator, repo: Re
             var db = (try evt.LocalEventDB(opts.hash).openReadOnly(w.io, w.gpa, r.core.repo_dir)) orelse return;
             defer db.deinit(w.io, w.gpa);
             const moment = evt.currentMomentFromDb(opts.hash, db.db) catch return;
-            const rec = (try evt.readRecordSubset(evt.Issue, struct { removed: bool, event: struct { title: []const u8, description: []const u8, labels: []const u8, status: evt.Issue.Status } }, evt.EventDB(opts.hash), opts.hash, moment, args.arena, args.id)) orelse return;
+            const rec = (try evt.readRecordSubset(evt.Issue, IssueSubset, evt.EventDB(opts.hash), opts.hash, moment, args.arena, args.id)) orelse return;
             if (rec.removed) return;
-            args.out.* = .{ .id = args.hex, .title = rec.event.title, .description = rec.event.description, .labels = rec.event.labels, .status = rec.event.status };
+            args.out.* = issueInfo(args.hex, rec);
         }
     }.run, .{ .arena = arena, .id = &id_bytes, .hex = id, .out = &out });
     return out;

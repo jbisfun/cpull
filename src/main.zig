@@ -6,17 +6,13 @@ const srv = @import("./serve.zig");
 const ui = @import("./ui.zig");
 const web = @import("./web.zig");
 const ws = @import("./workspace.zig");
-const ci = @import("./ci/ci.zig");
-const integrate = @import("./integrate/integrate.zig");
+const tools = @import("./tools/tools.zig");
+const api = @import("./api.zig");
 const evt = @import("./event.zig");
 
 // cook the terminal before a panic/segfault trace is printed, so the trace
 // isn't mangled by raw mode and the alternate buffer
 pub const std_options_debug_io = xit.xitui.terminal.crash_debug_io;
-
-// the wiki's html rewriting (superhtml's tokenizer) logs every character at
-// debug level
-pub const std_options: std.Options = .{ .log_scope_levels = &.{.{ .scope = .@"html/tokenizer", .level = .info }} };
 
 // the web UI: the jbisfun wiki theme (src/frontend), unless built with
 // -Dfrontend=classic, which keeps cpull's own terminal-grid web UI
@@ -30,7 +26,7 @@ pub const RunOpts = struct {
     global_config_path: ?[]const u8 = null,
     // false when NO_COLOR is set, so the TUI draws without colors
     color: bool = true,
-    // the process environment, which CI jobs inherit
+    // the process environment ($IDLCI_ADDR)
     environ: ?*const std.process.Environ.Map = null,
 };
 
@@ -74,15 +70,16 @@ pub fn main(init: std.process.Init) !u8 {
     const cwd_path = try std.process.currentPathAlloc(io, allocator);
     defer allocator.free(cwd_path);
 
-    // `cpull ci ...`: the CI's client commands
-    if (args.items.len > 0 and std.mem.eql(u8, args.items[0], "ci")) {
-        var arena = std.heap.ArenaAllocator.init(allocator);
-        defer arena.deinit();
-        const code = try ci.cli.run(io, arena.allocator(), args.items[1..], &environ_map, cwd_path, run_opts.out, run_opts.err);
-        try run_opts.out.flush();
+    // `cpull ci ...` moved to idlci (github.com/jbisfun/idlci), `cpull wiki ...`
+    // to the wiki and `cpull report ...` to radar: say where
+    if (args.items.len > 0) for ([_][2][]const u8{ .{ "ci", "idlci" }, .{ "wiki", "wiki" }, .{ "report", "radar" } }) |moved| {
+        if (!std.mem.eql(u8, args.items[0], moved[0])) continue;
+        try run_opts.err.print("`cpull {s}` moved to its own program: run `{s}", .{ moved[0], moved[1] });
+        for (args.items[1..]) |arg| try run_opts.err.print(" {s}", .{arg});
+        try run_opts.err.print("` (see theme docs/workspace-tools.md)\n", .{});
         try run_opts.err.flush();
-        return code;
-    }
+        return 2;
+    };
 
     run(.xit, .{}, io, allocator, args.items, cwd_path, run_opts) catch |err| switch (err) {
         error.HandledError => return 1,
@@ -203,37 +200,38 @@ pub fn run(
             };
 
             var local: web.LocalHost = if (workspace) |w| .{ .workspace = &w.host, .workspace_name = w.name, .workspace_root = w.root } else .{ .source = found };
-            // a workspace runs its CI too, under /ci
-            var mounts: [1]web.Mount = undefined;
-            if (workspace) |w| if (run_opts.environ) |environ| {
-                const ci_app = ci.App.init(io, allocator, w.root, environ, .{
-                    .jobs = local_opts.ci_jobs,
-                    .watch = if (local_opts.ci_watch) local_opts.ci_watch_interval else null,
-                    .listen = local_opts.web_listen,
-                    .workspace_name = w.name,
-                }) catch |err| blk: {
-                    try run_opts.err.print("ci disabled: {s}\n", .{@errorName(err)});
-                    break :blk null;
+            if (local_opts.old_ci_flags) try run_opts.err.print("--ci-jobs, --ci-watch and --ci-watch-interval are ignored: the CI is idlci's now (`idlci serve --jobs N --watch`)\n", .{});
+            // a workspace serves cpull's /api, sends the old /ci and /wiki/
+            // urls to those tools, and shows the other tools through theirs
+            var mounts: [4]web.Mount = undefined;
+            var announce: ?srv.Announce = null;
+            if (workspace) |w| {
+                mounts = .{
+                    .{ .prefix = api.prefix, .ctx = w, .handle = api.handle },
+                    .{ .prefix = tools.web.run_prefix, .ctx = w, .handle = tools.web.handleRun },
+                    .{ .prefix = tools.web.ci_prefix, .ctx = w, .handle = tools.web.handleCi },
+                    .{ .prefix = tools.web.wiki_prefix, .ctx = w, .handle = tools.web.handleWiki },
                 };
-                if (ci_app) |app| {
-                    mounts[0] = .{ .prefix = ci.web.prefix, .ctx = app, .handle = ci.web.handle };
-                    local.mounts = &mounts;
-                }
-                // forge x CI x issues: status everywhere, patch/stack CI, the merge gate, CI issues, commit links
-                integrate.install(w, ci_app, .{ .links_interval = if (local_opts.ci_watch) local_opts.ci_watch_interval else 30 });
-            };
-            try srv.runLocal(io, allocator, local, local_opts.web_listen, run_opts.err, Runnable{ .io = io, .allocator = allocator, .session = &session });
+                local.mounts = &mounts;
+                tools.install(w, run_opts.environ);
+                announce = .{ .root = w.root, .on_serving = startServing };
+            }
+            try srv.runLocal(io, allocator, local, local_opts.web_listen, run_opts.err, Runnable{ .io = io, .allocator = allocator, .session = &session }, announce);
         },
         .cli => |cli_cmd| switch (cli_cmd) {
             .serve => |options| try srv.run(repo_kind, any_repo_opts, io, allocator, cwd_path, options, run_opts.err, {}),
             .delete_user => |options| try srv.deleteUser(io, allocator, cwd_path, options, run_opts.out, run_opts.err),
             .stack => |options| {
-                integrate.installCli();
+                tools.installCli(run_opts.environ);
                 try ws.runStackCommand(io, allocator, cwd_path, options, run_opts.global_config_path, run_opts.out, run_opts.err);
             },
-            .report => |options| try @import("report/report.zig").run(io, allocator, cwd_path, options, run_opts.global_config_path, run_opts.out, run_opts.err),
-            .wiki => |options| try @import("wiki/wiki.zig").runCommand(io, allocator, cwd_path, options, run_opts.err),
             .records => |options| try @import("records.zig").run(io, allocator, cwd_path, options, run_opts.global_config_path, run_opts.out),
         },
     }
+}
+
+// the workspace server holds .pull/cpull/serve.lock: it scans for `fixes #id`
+// and turns idlci's failed jobs into issues
+fn startServing() void {
+    tools.startServing(.{});
 }

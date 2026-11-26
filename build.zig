@@ -57,10 +57,6 @@ pub fn build(b: *std.Build) void {
 
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    // the CI's job queue (src/ci); links libc. its C library is always built
-    // optimized, so debug builds of haxy don't run a debug SQLite
-    const sqlite_mod = b.dependency("sqlite", .{ .target = target, .optimize = .ReleaseFast }).module("sqlite");
-
     // main
     {
         const exe = b.addExecutable(.{
@@ -80,8 +76,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = wasm_exe.getEmittedBin(),
         });
         addFrontend(b, exe.root_module, vin_mod, frontend == .wiki);
-        exe.root_module.addImport("sqlite", sqlite_mod);
-        addWiki(b, exe.root_module, vin_mod, target, exe.root_module.optimize.?);
+        addTheme(b, exe.root_module, vin_mod, target, exe.root_module.optimize.?);
 
         const install_exe = b.addInstallArtifact(exe, .{});
         b.getInstallStep().dependOn(&install_exe.step);
@@ -100,44 +95,12 @@ pub fn build(b: *std.Build) void {
         unit_tests.root_module.addImport("xit", xit_dep.module("xit"));
         unit_tests.root_module.addImport("xml", xml_mod);
         unit_tests.root_module.addImport("ansi_art", ansi_art);
-        addWiki(b, unit_tests.root_module, vin_mod, target, optimize);
+        addTheme(b, unit_tests.root_module, vin_mod, target, optimize);
 
         const run_unit_tests = b.addRunArtifact(unit_tests);
         run_unit_tests.has_side_effects = true;
         const test_step = b.step("test", "Run unit tests");
         test_step.dependOn(&run_unit_tests.step);
-
-        // the CI (src/ci), with the cpull frontend it renders beside
-        const ci_tests = b.addTest(.{
-            .root_module = b.createModule(.{
-                .root_source_file = b.path("src/test_ci.zig"),
-                .target = target,
-                .optimize = optimize,
-            }),
-            .filters = test_filters,
-        });
-        ci_tests.root_module.addImport("xit", xit_dep.module("xit"));
-        ci_tests.root_module.addImport("xml", xml_mod);
-        ci_tests.root_module.addImport("ansi_art", ansi_art);
-        ci_tests.root_module.addImport("vin", vin_mod);
-        ci_tests.root_module.addImport("sqlite", sqlite_mod);
-        addTheme(b, ci_tests.root_module, target, optimize);
-        const run_ci_tests = b.addRunArtifact(ci_tests);
-        run_ci_tests.has_side_effects = true;
-        test_step.dependOn(&run_ci_tests.step);
-
-        // the wiki generator (src/wiki) stands alone too
-        const wiki_tests = b.addTest(.{
-            .root_module = b.createModule(.{
-                .root_source_file = b.path("src/wiki/wiki.zig"),
-                .target = target,
-                .optimize = optimize,
-            }),
-            .filters = test_filters,
-            .use_llvm = true,
-        });
-        addWiki(b, wiki_tests.root_module, vin_mod, target, optimize);
-        test_step.dependOn(&b.addRunArtifact(wiki_tests).step);
     }
 
     // module for using cpull as a library
@@ -148,12 +111,10 @@ pub fn build(b: *std.Build) void {
     cpull.addImport("xit", xit_dep.module("xit"));
     cpull.addImport("xml", xml_mod);
     cpull.addImport("ansi_art", ansi_art);
-    cpull.addImport("sqlite", sqlite_mod);
-    cpull.addImport("vin", vin_mod);
     cpull.addAnonymousImport("cpull.wasm", .{
         .root_source_file = wasm_exe.getEmittedBin(),
     });
-    addWiki(b, cpull, vin_mod, target, optimize);
+    addTheme(b, cpull, vin_mod, target, optimize);
 
     // try
     {
@@ -197,8 +158,7 @@ pub fn build(b: *std.Build) void {
         });
         // the network tests read cpull's own web UI
         addFrontend(b, server_exe.root_module, vin_mod, false);
-        server_exe.root_module.addImport("sqlite", sqlite_mod);
-        addWiki(b, server_exe.root_module, vin_mod, target, .debug);
+        addTheme(b, server_exe.root_module, vin_mod, target, .debug);
         const install_server_exe = b.addInstallArtifact(server_exe, .{});
 
         const unit_tests = b.addTest(.{
@@ -228,66 +188,16 @@ fn addFrontend(b: *std.Build, module: *std.Build.Module, vin_mod: *std.Build.Mod
     module.addImport("vin", vin_mod);
 }
 
-// the imports of the wiki generator (src/wiki, `cpull wiki`): cmark-gfm (C,
-// built here; adapted from abhinav/libcmark-gfm.zig), uucode, superhtml's
-// html tokenizer, zig-toml, zig-vin and the theme package's highlighter
-fn addWiki(b: *std.Build, module: *std.Build.Module, vin_mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
-    const cmark = b.dependency("cmark_gfm", .{});
-    const config = b.addConfigHeader(.{ .style = .{ .cmake = cmark.path("src/config.h.in") } }, .{
-        .HAVE_STDBOOL_H = true,
-        .HAVE___BUILTIN_EXPECT = true,
-        .HAVE___ATTRIBUTE__ = true,
-    });
-    const version = b.addConfigHeader(.{ .style = .{ .cmake = cmark.path("src/cmark-gfm_version.h.in") } }, .{
-        .PROJECT_VERSION_MAJOR = "0",
-        .PROJECT_VERSION_MINOR = "29",
-        .PROJECT_VERSION_PATCH = "0",
-        .PROJECT_VERSION_GFM = "13",
-    });
-    const lib = b.addLibrary(.{
-        .linkage = .static,
-        .name = "cmark-gfm",
-        .root_module = b.createModule(.{ .target = target, .optimize = optimize, .link_libc = true }),
-    });
-    lib.root_module.addConfigHeader(config);
-    lib.root_module.addConfigHeader(version);
-    lib.root_module.addIncludePath(b.path("src/wiki/c"));
-    lib.root_module.addIncludePath(cmark.path("src"));
-    lib.root_module.addIncludePath(cmark.path("extensions"));
-    lib.root_module.addCMacro("CMARK_GFM_STATIC_DEFINE", "1");
-    lib.root_module.addCMacro("CMARK_GFM_EXTENSIONS_STATIC_DEFINE", "1");
-    lib.root_module.addCSourceFiles(.{
-        .root = cmark.path("src"),
-        .files = &.{ "xml.c", "cmark.c", "man.c", "buffer.c", "blocks.c", "cmark_ctype.c", "inlines.c", "latex.c", "houdini_href_e.c", "syntax_extension.c", "houdini_html_e.c", "plaintext.c", "utf8.c", "references.c", "render.c", "iterator.c", "arena.c", "linked_list.c", "commonmark.c", "map.c", "html.c", "plugin.c", "scanners.c", "footnotes.c", "houdini_html_u.c", "registry.c", "node.c" },
-        .flags = &.{"-std=c99"},
-    });
-    lib.root_module.addCSourceFiles(.{
-        .root = cmark.path("extensions"),
-        .files = &.{ "core-extensions.c", "table.c", "strikethrough.c", "autolink.c", "tagfilter.c", "ext_scanners.c", "tasklist.c" },
-        .flags = &.{"-std=c99"},
-    });
-    module.linkLibrary(lib);
-    // the shared theme package (../theme, a workspace sibling): the themed-page
-    // layer, serve.addr discovery and the tree-sitter highlighter
-    addTheme(b, module, target, optimize);
-    module.addImport("vin", vin_mod);
-    module.addImport("toml", b.dependency("toml", .{ .target = target, .optimize = optimize }).module("toml"));
-    module.addImport("superhtml", b.dependency("superhtml", .{ .target = target, .optimize = optimize }).module("superhtml"));
-    module.addImport("uucode", b.dependency("uucode", .{
-        .target = target,
-        .optimize = optimize,
-        .fields = @as([]const []const u8, &.{ "general_category", "simple_lowercase_mapping", "script" }),
-    }).module("uucode"));
-}
-
 // the jbisfun/theme package's modules (build.zig.zon: `.path = "../theme"`,
-// the pull workspace's sibling checkout): `theme`, `discovery` and
-// `highlight` (the wiki's code blocks and the files view)
-fn addTheme(b: *std.Build, module: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
+// the pull workspace's sibling checkout): `theme` (the themed-page layer),
+// `discovery` (finding the workspace's other tools by their serve.addr) and
+// `highlight` (the files view), plus zig-vin, the template engine
+fn addTheme(b: *std.Build, module: *std.Build.Module, vin_mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
     const dep = b.dependency("theme", .{ .target = target, .optimize = optimize, .highlight = true });
     module.addImport("theme", dep.module("theme"));
     module.addImport("discovery", dep.module("discovery"));
     module.addImport("highlight", dep.module("highlight"));
+    module.addImport("vin", vin_mod);
 }
 
 // reads every ANSI-art text file while configuring the build. sorting keeps

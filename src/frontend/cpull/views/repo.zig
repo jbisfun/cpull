@@ -12,8 +12,8 @@ const report_anchor = @import("../../../report/anchor.zig");
 const threads = @import("threads.zig");
 const admin_views = @import("admin.zig");
 const fork_views = @import("fork.zig");
-// CI status per repo and commit, issue links in commit messages (src/integrate)
-const ci_view = @import("../../../integrate/view.zig");
+// CI status per repo and commit, issue links in commit messages (src/tools)
+const ci_view = @import("../../../tools/view.zig");
 const Ctx = ctx.Ctx;
 const Repo = ui.Repo;
 const RoutablePage = ui.RoutablePage;
@@ -177,7 +177,7 @@ pub fn chrome(c: Ctx, data: anytype, title: []const u8, extra: []const theme.Lin
     }
 
     // the CI of the repo's idl projects, in a workspace
-    if (ci_view.repoGroup(c.arena, id)) |group| try groups.insert(aa, 0, group);
+    if (ci_view.repoGroup(c.tools, id)) |group| try groups.insert(aa, 0, group);
 
     var crumbs: std.ArrayList(theme.Link) = .empty;
     const name = if (data.header.owner_name.len > 0 and c.workspace() == null) try c.print("{s}:{s}", .{ data.header.owner_name, data.header.name }) else data.header.name;
@@ -579,10 +579,10 @@ pub fn commits(c: Ctx, w: *std.Io.Writer, data: anytype, cm: *const Repo.Commits
     const aa = c.aa();
     const location = cm.handle.location;
     var rows: std.ArrayList(CommitRow) = .empty;
-    const ci_index = if (location == .repo) ci_view.commitIndex(c.arena, location.repo) else null;
+    const ci_index = if (location == .repo) ci_view.commitIndex(c.tools, location.repo) else null;
     for (cm.commits) |*commit_item| try rows.append(aa, .{
         .ci = if (ci_index) |x| x.get(commit_item.oid) else null,
-        .summary_html = if (location == .repo) ci_view.linkHtmlIfAny(c.arena, location.repo, ctx.summary(commit_item.message)) else null,
+        .summary_html = if (location == .repo) ci_view.linkHtmlIfAny(c.tools, location.repo, ctx.summary(commit_item.message)) else null,
         .oid = ctx.short(commit_item.oid),
         .summary = ctx.summary(commit_item.message),
         .href = try c.routeUrl(location.commitMessageRoute(.object, commit_item.oid, cm.base_oid)),
@@ -631,10 +631,10 @@ fn pageRoute(cm: *const Repo.Commits, oid: []const u8) ?RoutablePage {
 pub fn commit(c: Ctx, w: *std.Io.Writer, data: anytype, cm: *const Repo.Commits, item: *const Repo.Commits.Commit) !void {
     const location = cm.handle.location;
     const root = std.mem.allEqual(u8, item.parent_oid, '0');
-    const ci_index = if (location == .repo) ci_view.commitIndex(c.arena, location.repo) else null;
+    const ci_index = if (location == .repo) ci_view.commitIndex(c.tools, location.repo) else null;
     try fe.emit(c, w, try chrome(c, data, ctx.summary(item.message), &.{.{ .label = ctx.short(item.oid) }}), "commit.html", .{
         .ci = if (ci_index) |x| x.get(item.oid) else null,
-        .message_html = if (location == .repo) ci_view.linkHtml(c.arena, location.repo, item.message) else null,
+        .message_html = if (location == .repo) ci_view.linkHtml(c.tools, location.repo, item.message) else null,
         .summary = ctx.summary(item.message),
         .message = item.message,
         .truncated = item.message_truncated,

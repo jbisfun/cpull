@@ -5,20 +5,19 @@
 // `fixes #id`, `closes #id` or `resolves #id` (and their other tenses) close
 // the issue once the commit lands on the repo's pullfile branch: the
 // workspace server polls each repo's branch tip and reads the commits that
-// arrived since the tip it saw last (kept in the CI db's link_tips; the first
+// arrived since the tip it saw last (kept in integrate.json's link_tips; the first
 // look only records the tip), so each commit is handled once, however often
 // it runs, and a closed issue someone reopens stays open. The pullfile's
 // `cpull.close_issues = false` turns closing off.
 const std = @import("std");
-const db = @import("../ci/db.zig");
-const ci_app = @import("../ci/app.zig");
 const ui = @import("../ui.zig");
 const ws_mod = @import("../workspace.zig");
-const forge = @import("forge.zig");
+const forge = @import("../forge.zig");
 const status = @import("status.zig");
-const integrate = @import("integrate.zig");
+const tools = @import("tools.zig");
+const idlci = @import("idlci.zig");
+const state_mod = @import("state.zig");
 
-const App = ci_app.App;
 const Workspace = ws_mod.Workspace;
 const Repo = ws_mod.Repo;
 const log = std.log.scoped(.integrate);
@@ -163,41 +162,50 @@ pub fn link(r: *Resolver, text: []const u8, mode: Mode) ![]const u8 {
 // closing issues when commits land
 //
 
-pub fn start(ws: *Workspace, app: *App, interval_s: u64) void {
-    const t = std.Thread.spawn(.{}, run, .{ ws, app, interval_s }) catch |e| {
+pub fn start(ws: *Workspace, interval_s: u64) void {
+    const t = std.Thread.spawn(.{}, run, .{ ws, interval_s }) catch |e| {
         log.err("can't start the commit-link scanner: {t}", .{e});
         return;
     };
     t.detach();
 }
 
-fn run(ws: *Workspace, app: *App, interval_s: u64) void {
-    while (!app.runner.stopping.load(.acquire)) {
-        _ = scanOnce(ws, app) catch |e| log.warn("commit links: {t}", .{e});
-        app.io.sleep(.fromSeconds(@intCast(interval_s)), .awake) catch {};
+fn run(ws: *Workspace, interval_s: u64) void {
+    while (!tools.stopped()) {
+        _ = scanOnce(ws) catch |e| log.warn("commit links: {t}", .{e});
+        ws.io.sleep(.fromSeconds(@intCast(interval_s)), .awake) catch {};
     }
 }
 
 pub const Closed = struct { repo: []const u8, issue: []const u8, commit: []const u8 };
 
 // one pass over every repo's pullfile branch; returns how many issues it closed
-pub fn scanOnce(ws: *const Workspace, app: *App) !usize {
-    var arena = std.heap.ArenaAllocator.init(app.gpa);
+pub fn scanOnce(ws: *const Workspace) !usize {
+    var arena = std.heap.ArenaAllocator.init(ws.gpa);
     defer arena.deinit();
     const aa = arena.allocator();
-    const cfg = integrate.config(ws.io, ws.gpa, ws.root);
+    const cfg = tools.config(ws.io, ws.gpa, ws.root);
+    const saved = try state_mod.load(ws.io, aa, ws.root);
     var closed: std.ArrayList(Closed) = .empty;
+    var moved: std.StringArrayHashMapUnmanaged([]const u8) = .empty;
     for (try forge.allRepos(ws, aa)) |repo| {
         const name = forge.displayName(repo);
         const branch = if (repo.name.len == 0) forge.headBranch(ws.io, aa, repo.path) orelse continue else repo.branch;
         const tip = forge.branchTip(ws.io, aa, repo.path, branch) orelse continue;
-        const seen = try app.store.linkTip(aa, name);
+        const seen = saved.link_tips.map.get(name);
         if (seen) |s| if (std.mem.eql(u8, s, tip)) continue;
         if (seen != null and cfg.close_issues) {
-            closeLanded(ws, &arena, repo, branch, seen.?, tip, &closed) catch |e| log.warn("commit links in {s}: {t}", .{ name, e });
+            closeLanded(ws, &arena, repo, branch, seen.?, tip, &closed) catch |e| log.warn("commit links in {s}: {s}", .{ name, @errorName(e) });
         }
-        try app.store.setLinkTip(name, tip);
+        try moved.put(aa, name, tip);
     }
+    if (moved.count() > 0) try state_mod.update(ws.io, ws.gpa, ws.root, struct {
+        fn f(a: std.mem.Allocator, s: *state_mod.State, m: *const std.StringArrayHashMapUnmanaged([]const u8)) !bool {
+            var it = m.iterator();
+            while (it.next()) |e| try s.link_tips.map.put(a, try a.dupe(u8, e.key_ptr.*), try a.dupe(u8, e.value_ptr.*));
+            return true;
+        }
+    }.f, &moved);
     return closed.items.len;
 }
 
@@ -252,8 +260,9 @@ pub const References = struct {
 
 // the commits (on any local branch, last two years), patches, stacks and CI
 // jobs that reference issue `id` of `repo`. a workspace issue (in the events
-// repo) is looked for in every repo.
-pub fn references(ws: *const Workspace, arena: *std.heap.ArenaAllocator, store: ?*db.Store, repo: Repo, id: []const u8) !References {
+// repo) is looked for in every repo. `client` (idlci, when it's running)
+// adds the commits' CI balls and the jobs reported on the issue.
+pub fn references(ws: *const Workspace, arena: *std.heap.ArenaAllocator, client: ?*idlci.Client, repo: Repo, id: []const u8) !References {
     const aa = arena.allocator();
     const workspace_issue = if (ws.events) |e| std.mem.eql(u8, e.path, repo.path) else false;
     const repos: []const Repo = if (workspace_issue) try forge.allRepos(ws, aa) else &.{repo};
@@ -270,7 +279,7 @@ pub fn references(ws: *const Workspace, arena: *std.heap.ArenaAllocator, store: 
             const oid = fields.next() orelse continue;
             const summary = fields.next() orelse "";
             const ref = try mentions(aa, fields.rest(), id) orelse continue;
-            if (index == null) index = if (store) |s| status.commitIndex(aa, s, forge.displayName(r)) catch null else null;
+            if (index == null) index = if (client) |c| commitIndex(c, forge.displayName(r)) else null;
             try commits.append(aa, .{
                 .repo = forge.displayName(r),
                 .oid = oid,
@@ -294,8 +303,25 @@ pub fn references(ws: *const Workspace, arena: *std.heap.ArenaAllocator, store: 
         try stacks.append(aa, .{ .repo = "", .title = ev.title, .href = try ui.Workspace.stackUrl(aa, &s.id), .status = @tagName(ev.status.kind()) });
     }
     var jobs: std.ArrayList(status.JobRef) = .empty;
-    if (store) |s| for (try s.issueJobs(aa, forge.displayName(repo), id)) |j| try jobs.append(aa, try status.jobRef(aa, j));
+    if (client) |c| {
+        const saved = state_mod.load(ws.io, aa, ws.root) catch state_mod.State{};
+        const ids = saved.issue_jobs.map.get(try state_mod.issueJobsKey(aa, forge.displayName(repo), id)) orelse &.{};
+        // newest first, as many as the page shows
+        var i = ids.len;
+        while (i > 0 and jobs.items.len < 20) {
+            i -= 1;
+            const job = c.get(try std.fmt.allocPrint(aa, "/api/jobs/{d}", .{ids[i]})) catch continue;
+            if (status.jobRefOfJob(c, job)) |ref| try jobs.append(aa, ref);
+        }
+    }
     return .{ .commits = commits.items, .patches = patches.items, .stacks = stacks.items, .jobs = jobs.items };
+}
+
+// idlci's CI per commit of a repo (GET /api/status/commits?repo=R)
+pub fn commitIndex(client: *idlci.Client, repo: []const u8) ?status.CommitIndex {
+    const path = std.fmt.allocPrint(client.a, "/api/status/commits?repo={s}", .{idlci.queryEscape(client.a, repo) catch return null}) catch return null;
+    const v = client.get(path) catch return null;
+    return status.parseCommitIndex(client, v);
 }
 
 test scan {

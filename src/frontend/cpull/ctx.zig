@@ -5,11 +5,14 @@ const ui = @import("../../ui.zig");
 const evt = @import("../../event.zig");
 const theme = @import("theme");
 const localtime = @import("localtime.zig");
+const tools_view = @import("../../tools/view.zig");
 
 pub const Ctx = struct {
     gpa: std.mem.Allocator,
     arena: *std.heap.ArenaAllocator,
     session: *const ui.Session.Data,
+    // the other workspace tools (idlci's CI) as this page sees them
+    tools: *tools_view.Render,
 
     pub fn aa(c: Ctx) std.mem.Allocator {
         return c.arena.allocator();

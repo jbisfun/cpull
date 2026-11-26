@@ -1,4 +1,5 @@
 const std = @import("std");
+const discovery = @import("discovery");
 const xit = @import("xit");
 const rp = xit.repo;
 const ui = @import("./ui.zig");
@@ -224,13 +225,22 @@ pub fn run(
     }
 }
 
+// a workspace server announcing itself to the workspace's other tools
+// (discovery: .pull/cpull/serve.addr + serve.lock), and what it runs once
+// it's the one serving the workspace
+pub const Announce = struct {
+    root: []const u8,
+    on_serving: ?*const fn () void = null,
+};
+
 // serve just the web UI for local mode (a repo or a pull workspace). with no
 // `listen` address, `runnable` (the local TUI) runs in the foreground while
 // the listener runs in the background; when the default port is taken, a
 // random ephemeral port is used instead, and the web UI's url is passed to
 // `runnable.run`. with one, there is no TUI: the listener binds exactly that
 // address and serves until the process is killed, so it can run as a job
-// nobody is attached to.
+// nobody is attached to. `announce` makes it the workspace's cpull (theme
+// docs/workspace-tools.md §1).
 pub fn runLocal(
     io: std.Io,
     allocator: std.mem.Allocator,
@@ -238,6 +248,7 @@ pub fn runLocal(
     listen_value: ?[]const u8,
     err: *std.Io.Writer,
     runnable: anytype,
+    announce: ?Announce,
 ) !void {
     // without an address, always fall back, so another instance viewing a
     // second repo just binds its own port
@@ -253,6 +264,24 @@ pub fn runLocal(
     if (listen_value != null) {
         try err.print("serving the web UI on http://{s}:{d}/\n", .{ web_listen_address.host, web_server.socket.address.getPort() });
         try err.flush();
+    }
+
+    var serving: ?discovery.Serving = null;
+    defer if (serving) |*s| s.release(io, allocator);
+    if (announce) |an| {
+        const addr = try std.fmt.allocPrint(allocator, "{s}:{d}", .{ web_listen_address.host, web_server.socket.address.getPort() });
+        defer allocator.free(addr);
+        if (discovery.announce(io, allocator, an.root, .cpull, addr)) |s| {
+            serving = s;
+            if (an.on_serving) |f| f();
+        } else |e| switch (e) {
+            error.AlreadyServing => try err.print("another cpull serves {s} (.pull/cpull/serve.lock is held); this one doesn't announce itself, file CI issues or close fixed ones\n", .{an.root}),
+            else => try err.print("can't announce the server in {s}/.pull/cpull: {s}\n", .{ an.root, @errorName(e) }),
+        }
+        try err.flush();
+    }
+
+    if (listen_value != null) {
         try tasks.await(io);
         return;
     }

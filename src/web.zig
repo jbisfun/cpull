@@ -24,8 +24,6 @@ const cookie_name = "cpull_session";
 // max-age (chrome's 400 day cap) so it outlives the browser.
 const session_cookie_fmt = cookie_name ++ "={s}; Path=/; HttpOnly; SameSite=Lax; Max-Age=34560000";
 const form_flash_cookie = "cpull_form_flash";
-const wiki_serve = @import("wiki/serve.zig");
-const wiki_forge = @import("wiki/forge.zig");
 const multipart = @import("multipart.zig");
 const report_web = @import("report/web.zig");
 const local_flash_cookie = "cpull_local_flash";
@@ -62,9 +60,10 @@ const embeds = [_]Embed{
     .{ .path = "cpull.wasm", .content_type = "application/wasm", .body = @embedFile("cpull.wasm") },
 };
 
-// a feature serving its own urls under `prefix` in local mode (cpull's CI
-// under /ci): `handle` gets every request whose path is `prefix` or below it,
-// with the whole target (path and query)
+// a feature serving its own urls under `prefix` in local mode (the
+// workspace server's /api and the routes for the other tools, src/tools/web.zig):
+// `handle` gets every request whose path is `prefix` or below it, with the
+// whole target (path and query)
 pub const Mount = struct {
     prefix: []const u8,
     ctx: *anyopaque,
@@ -83,7 +82,7 @@ pub const LocalHost = struct {
     // the workspace workspace mode views, whose repo urls carry their identity
     workspace: ?*const ui.WorkspaceHost = null,
     workspace_name: ?[]const u8 = null,
-    // the workspace's root dir, for what's served from it (the wiki at /wiki/)
+    // the workspace's root dir
     workspace_root: ?[]const u8 = null,
 
     // the repo a request's url base names: "" in plain local mode, the
@@ -231,13 +230,6 @@ fn handleRequest(
         .server => {},
     }
 
-    // the live wiki's forge api (/wiki/_cpull/: issue counts, reports, filing
-    // a report from the right-click menu), over the workspace's repos
-    if (host == .local) if (host.local.workspace) |workspace| if (wiki_forge.matches(path)) {
-        if (method == .POST and !isSameOrigin(request)) return respondForbidden(request);
-        return wiki_forge.handle(io, allocator, request, @ptrCast(@alignCast(workspace.ctx)), owned_target orelse request.head.target);
-    };
-
     // POST routes can be scoped by any page, so they can redirect using
     // the base of the URL. this allows logging in to keep you on the page
     // you were on. local mode has no accounts, so only the repo routes.
@@ -338,9 +330,6 @@ fn handleRequest(
         });
         return;
     }
-
-    // the workspace wiki (src/wiki), built from the workspace's repos
-    if (host == .local) if (host.local.workspace_root) |root| if (wiki_serve.matches(path)) return wiki_serve.handle(io, allocator, request, root, path);
 
     // raw files and attachments serve bytes rather than a page, so they are
     // matched before the routable pages

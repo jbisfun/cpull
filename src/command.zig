@@ -5,8 +5,6 @@ pub const CommandKind = enum {
     serve,
     delete_user,
     stack,
-    report,
-    wiki,
     records,
 };
 
@@ -60,41 +58,6 @@ fn commandHelp(command_kind: CommandKind) Help {
             \\cpull records ~/ws/core ~/ws
             ,
         },
-        .report => .{
-            .name = "report",
-            .descrip =
-            \\line-anchored issues in a pull workspace (what radar was): a line of
-            \\code plus a note, filed as an issue in the repo it points at ("." =
-            \\the workspace's events repo). the line text is read from the file.
-            \\list, show, close and reopen take every repo's reports; an id prefix
-            \\will do. migrate files `radar list --all --json` output ("-" = stdin).
-            ,
-            .example =
-            \\cpull report pull src/main.zig 42 -q "unwrap()" -n "panics on an empty pullfile"
-            \\cpull report list [--all] [--json]
-            \\cpull report show 5f1c / close 5f1c / reopen 5f1c
-            \\cpull report migrate radar.json
-            \\--title, --labels and --source (default cli) set those fields; --json prints json.
-            ,
-        },
-        .wiki => .{
-            .name = "wiki",
-            .descrip =
-            \\the workspace wiki: a static site from every repo's README, docs/
-            \\and code reference, with <workspace>/wiki as its data (wiki.toml,
-            \\templates, pages, locales, translations). build writes it to
-            \\.pull/cpull/wiki/dist, regenerating only what changed; publish also
-            \\mirrors it into jbisfun.github.io and stages it. the workspace web
-            \\server serves it live at /wiki/.
-            ,
-            .example =
-            \\cpull wiki build
-            \\cpull wiki build --force
-            \\cpull wiki publish
-            \\cpull wiki clean
-            \\--workspace DIR names the workspace; by default, the one around the current dir.
-            ,
-        },
         .delete_user => .{
             .name = "delete-user",
             .descrip =
@@ -145,10 +108,8 @@ pub fn printHelp(cmd_kind_maybe: ?CommandKind, writer: *std.Io.Writer) !void {
             \\  --workspace DIR     view the pull workspace at DIR
             \\  --web-listen ADDR   no TUI: serve only the web UI on ADDR (like
             \\                      127.0.0.1:8080) until killed, e.g. as a pull job
-            \\a workspace also runs its idl projects' CI at /ci (`ci --help`):
-            \\  --ci-jobs N         concurrent CI jobs (default 1)
-            \\  --ci-watch          queue build + test when a project's HEAD moves
-            \\  --ci-watch-interval SECS  between HEAD polls (default 15)
+            \\a workspace server also serves cpull's JSON API at /api and talks to
+            \\the workspace's other tools (idlci, wiki, radar) over theirs.
             \\
             \\
         , .{});
@@ -190,11 +151,6 @@ pub const CommandArgs = struct {
         .{"--title"},
         .{"--description"},
         .{"--labels"},
-        .{"-q"},
-        .{"--quote"},
-        .{"-n"},
-        .{"--note"},
-        .{"--source"},
         .{"--ci-jobs"},
         .{"--ci-watch-interval"},
     });
@@ -298,8 +254,6 @@ pub const StackOptions = struct {
     force: bool = false,
 };
 
-pub const ReportOptions = @import("report/report.zig").Options;
-
 // `cpull` with no command: local mode
 pub const LocalOptions = struct {
     // the pull workspace to view instead of the repo around the current dir
@@ -307,19 +261,15 @@ pub const LocalOptions = struct {
     // serve only the web UI, on exactly this address, until killed: no TUI
     // and no accounts, for running as a background job
     web_listen: ?[]const u8 = null,
-    // the CI (src/ci) in a workspace: concurrent jobs, and whether to queue
-    // build + test when a project's git HEAD moves, polled every interval
-    ci_jobs: usize = 1,
-    ci_watch: bool = false,
-    ci_watch_interval: u64 = 15,
+    // --ci-jobs/--ci-watch/--ci-watch-interval were given: the CI moved to
+    // idlci (`idlci serve --jobs N --watch`), so they're ignored with a warning
+    old_ci_flags: bool = false,
 };
 
 pub const Command = union(CommandKind) {
     serve: srv.Options,
     delete_user: srv.DeleteUserOptions,
     stack: StackOptions,
-    report: ReportOptions,
-    wiki: @import("wiki/wiki.zig").Options,
     records: @import("records.zig").Options,
 
     pub fn initMaybe(cmd_args: *CommandArgs) !?Command {
@@ -350,32 +300,6 @@ pub const Command = union(CommandKind) {
                 if (cmd_args.get("--labels")) |value_maybe| options.labels = value_maybe orelse return error.LabelsNeedsValue;
                 options.force = cmd_args.contains("--force");
                 return .{ .stack = options };
-            },
-            .report => {
-                const action, const rest = @import("report/report.zig").parseAction(cmd_args.positional_args) orelse return null;
-                var options: ReportOptions = .{ .action = action, .args = rest };
-                if (cmd_args.get("--workspace")) |value_maybe| options.workspace_path = value_maybe orelse return error.WorkspaceNeedsValue;
-                inline for (.{ "-q", "--quote" }) |flag| if (cmd_args.get(flag)) |value_maybe| {
-                    options.quote = value_maybe orelse return error.QuoteNeedsValue;
-                };
-                inline for (.{ "-n", "--note" }) |flag| if (cmd_args.get(flag)) |value_maybe| {
-                    options.note = value_maybe orelse return error.NoteNeedsValue;
-                };
-                if (cmd_args.get("--title")) |value_maybe| options.title = value_maybe orelse return error.TitleNeedsValue;
-                if (cmd_args.get("--labels")) |value_maybe| options.labels = value_maybe orelse return error.LabelsNeedsValue;
-                if (cmd_args.get("--source")) |value_maybe| options.source = value_maybe orelse return error.SourceNeedsValue;
-                options.all = cmd_args.contains("--all");
-                options.json = cmd_args.contains("--json");
-                return .{ .report = options };
-            },
-            .wiki => {
-                const positional = cmd_args.positional_args;
-                if (positional.len != 1) return null;
-                const Options = @import("wiki/wiki.zig").Options;
-                const action = std.meta.stringToEnum(@FieldType(Options, "action"), positional[0]) orelse return null;
-                var options: Options = .{ .action = action, .force = cmd_args.contains("--force") };
-                if (cmd_args.get("--workspace")) |value_maybe| options.workspace_path = value_maybe orelse return error.WorkspaceNeedsValue;
-                return .{ .wiki = options };
             },
             .records => {
                 if (cmd_args.positional_args.len == 0) return null;
@@ -479,9 +403,9 @@ pub const CommandDispatch = union(enum) {
             var options: LocalOptions = .{};
             if (cmd_args.get("--workspace")) |value_maybe| options.workspace_path = value_maybe orelse return error.WorkspaceNeedsValue;
             if (cmd_args.get("--web-listen")) |value_maybe| options.web_listen = value_maybe orelse return error.WebListenNeedsValue;
-            if (cmd_args.get("--ci-jobs")) |value_maybe| options.ci_jobs = std.fmt.parseInt(usize, value_maybe orelse return error.CiJobsNeedsValue, 10) catch return error.InvalidCiJobs;
-            if (cmd_args.get("--ci-watch-interval")) |value_maybe| options.ci_watch_interval = std.fmt.parseInt(u64, value_maybe orelse return error.CiWatchIntervalNeedsValue, 10) catch return error.InvalidCiWatchInterval;
-            options.ci_watch = cmd_args.contains("--ci-watch");
+            if (cmd_args.get("--ci-jobs") != null) options.old_ci_flags = true;
+            if (cmd_args.get("--ci-watch-interval") != null) options.old_ci_flags = true;
+            if (cmd_args.contains("--ci-watch")) options.old_ci_flags = true;
             return .{ .local = options };
         }
     }
