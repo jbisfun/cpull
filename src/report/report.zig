@@ -7,7 +7,7 @@
 // pull workspace. pull (`pull cpull report`), its MCP tools, ycode-radar and
 // the wiki's right-click menu all drive it.
 //
-//   cpull report REPO FILE LINE [-q QUOTE] [-n NOTE] [--title T] [--labels L] [--source S] [--json]
+//   cpull report [add] REPO FILE LINE [-q QUOTE] [-n NOTE] [--title T] [--labels L] [--source S] [--json]
 //   cpull report list [--all] [--json]
 //   cpull report show ID
 //   cpull report close ID / cpull report reopen ID
@@ -58,7 +58,7 @@ pub fn parseAction(positional: []const []const u8) ?struct { Action, []const []c
     const action = std.meta.stringToEnum(Action, positional[0]) orelse return null;
     const rest = positional[1..];
     const ok = switch (action) {
-        .add => false,
+        .add => rest.len == 3,
         .list => rest.len == 0,
         .show, .close, .reopen, .migrate => rest.len == 1,
     };
@@ -674,6 +674,8 @@ test parseAction {
     try std.testing.expectEqual(Action.close, parseAction(&.{ "close", "ab12" }).?[0]);
     try std.testing.expect(parseAction(&.{ "close", "a", "b", "c" }) == null);
     try std.testing.expect(parseAction(&.{"pull"}) == null);
+    try std.testing.expectEqual(Action.add, parseAction(&.{ "add", "pull", "a.zig", "3" }).?[0]);
+    try std.testing.expectEqualStrings("pull", parseAction(&.{ "add", "pull", "a.zig", "3" }).?[1][0]);
 }
 
 test deriveTitle {

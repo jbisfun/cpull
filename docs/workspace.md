@@ -72,6 +72,10 @@ URLs
 
 * Each repo's own pages are at `/<workspace>:<repo>/...`, the same as on a server, where `<workspace>` is the root dir's name. cpull repo names can't hold `/`, so a nested `group/app` is `group.app`, here and when the repo is pushed to a cpull server. A root events repo is `workspace`.
 
+Reports
+
+* Reports are issues pinned to a line of code, filed with `pull cpull report REPO FILE LINE` (what radar was). See [report.md](report.md).
+
 Stacks
 
 * A stack names one patch per member repo. Open one from repos that have work on a branch with `pull cpull patch` (or `cpull stack new --title T core:feature group/app:feature`). This opens an ordinary patch in each repo and the stack in the events repo.
