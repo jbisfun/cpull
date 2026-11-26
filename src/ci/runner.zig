@@ -55,7 +55,7 @@ pub const Runner = struct {
                 killGroup(pid, .TERM);
                 killLater(r.io, pid);
             };
-            append(r.io, rec.job.log, "\n[idlci] server restarted while this job was running; marked failed\n");
+            append(r.io, rec.job.log, "\n[ci] server restarted while this job was running; marked failed\n");
         }
     }
 
@@ -113,14 +113,14 @@ pub const Runner = struct {
                 map.put("PULL_ROOT", root) catch return;
                 env = map;
             } else |e| {
-                const text = std.fmt.allocPrint(a, "[idlci] job #{d}: can't prepare the work tree for {s}: {t}\n", .{ job.id, job.subject.?, e }) catch "";
+                const text = std.fmt.allocPrint(a, "[ci] job #{d}: can't prepare the work tree for {s}: {t}\n", .{ job.id, job.subject.?, e }) catch "";
                 Io.Dir.cwd().writeFile(io, .{ .sub_path = job.log, .data = text }) catch {};
                 r.store.finish(job.id, .failed, null) catch {};
                 return;
             }
         }
         const dir = std.fs.path.join(a, &.{ root, job.project }) catch return;
-        const header = std.fmt.allocPrint(a, "{s}[idlci] job #{d} on executor #{d} in {s}, started {s}\n[idlci] git {s} {s}@{s}{s}\n$ idl {s}\n", .{
+        const header = std.fmt.allocPrint(a, "{s}[ci] job #{d} on executor #{d} in {s}, started {s}\n[ci] git {s} {s}@{s}{s}\n$ idl {s}\n", .{
             prep_log,
             job.id,
             executor + 1,
@@ -151,7 +151,7 @@ pub const Runner = struct {
             // its own process group, so cancel kills compilers too
             .pgid = 0,
         }) catch |e| {
-            append(io, job.log, std.fmt.allocPrint(a, "[idlci] failed to start {s}: {t}\n", .{ r.idl, e }) catch "");
+            append(io, job.log, std.fmt.allocPrint(a, "[ci] failed to start {s}: {t}\n", .{ r.idl, e }) catch "");
             r.store.finish(job.id, .failed, null) catch {};
             return;
         };
@@ -176,7 +176,7 @@ pub const Runner = struct {
         const took = if (job.started) |s| db.now(io) - s else 0;
         var code_buf: [16]u8 = undefined;
         const code_text = if (code) |c| std.fmt.bufPrint(&code_buf, "{d}", .{c}) catch "-" else "-";
-        append(io, job.log, std.fmt.allocPrint(a, "\n[idlci] finished: {t} (exit {s}) in {d}s, at {s}\n", .{ status, code_text, took, fmt.dt(a, db.now(io)) catch "" }) catch "");
+        append(io, job.log, std.fmt.allocPrint(a, "\n[ci] finished: {t} (exit {s}) in {d}s, at {s}\n", .{ status, code_text, took, fmt.dt(a, db.now(io)) catch "" }) catch "");
         r.store.finish(job.id, status, code) catch |e| log.err("job #{d}: {t}", .{ job.id, e });
     }
 

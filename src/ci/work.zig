@@ -70,7 +70,7 @@ pub fn prepare(io: Io, a: Allocator, root: []const u8, subject: []const u8, chec
     const dir = try dirFor(a, root, subject);
     try Io.Dir.cwd().createDirPath(io, dir);
     var log: std.ArrayList(u8) = .empty;
-    try log.print(a, "[idlci] work tree {s}\n", .{dir});
+    try log.print(a, "[ci] work tree {s}\n", .{dir});
     for (try parseCheckout(a, checkout)) |line| {
         if (line.repo.len == 0 or std.mem.indexOf(u8, line.repo, "..") != null) return error.InvalidCheckout;
         const src = try std.fs.path.join(a, &.{ root, line.repo });
@@ -92,7 +92,7 @@ pub fn prepare(io: Io, a: Allocator, root: []const u8, subject: []const u8, chec
             if (exists(io, wt)) Io.Dir.cwd().deleteTree(io, wt) catch {};
             try git(io, a, &.{ "-C", src, "worktree", "add", "-q", "--detach", "--force", wt, line.oid });
         }
-        try log.print(a, "[idlci]   {s} at {s}\n", .{ line.repo, line.oid[0..@min(line.oid.len, 10)] });
+        try log.print(a, "[ci]   {s} at {s}\n", .{ line.repo, line.oid[0..@min(line.oid.len, 10)] });
     }
     // a pull workspace: the root's pullfile, so idl and pull see the same repos
     const pf_src = try std.fs.path.join(a, &.{ root, "pullfile.plist" });
