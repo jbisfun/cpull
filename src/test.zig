@@ -13,4 +13,10 @@ comptime {
     _ = @import("report/anchor.zig");
     _ = @import("wiki/forge.zig");
     _ = @import("pullfile.zig");
+    _ = @import("multipart.zig");
+    _ = @import("report/web.zig");
+    _ = @import("frontend/cpull/frontend.zig");
+    _ = @import("frontend/cpull/localtime.zig");
+    _ = @import("frontend/cpull/views/repo.zig");
+    _ = @import("frontend/cpull/views/admin.zig");
 }

@@ -384,7 +384,11 @@ pub fn init(
                             var discussions_data = try Discussions.init(repo_kind, opened.self_repo_opts, arena, opened, io, session.haxy_moment, repo_identity.identity, discussions_search, discussions_selected, discussions_comment, discussions_comments_start, discussions_view, tabViewer(handle, repo, .discuss));
                             var issues_data = try Issues.init(repo_kind, opened.self_repo_opts, arena, opened, io, session.haxy_moment, repo_identity.identity, issues_search, issues_selected, issues_comment, issues_comments_start, issues_theirs, issues_view, tabViewer(handle, repo, .issue));
                             // cpull reports: anchored issues' excerpts and the files view's line markers
-                            if (patchrev_id.len == 0) files_data.anchors = report_anchor.fileAnchors(repo_kind, opened.self_repo_opts, opened, io, arena, files_data.dir) catch &.{};
+                            // (every file's for a diff, whose files span directories)
+                            files_data.anchors = if (route == .repo_diff or patchrev_id.len != 0 and changes_data == .diff)
+                                report_anchor.allAnchors(repo_kind, opened.self_repo_opts, opened, io, arena) catch &.{}
+                            else
+                                report_anchor.fileAnchors(repo_kind, opened.self_repo_opts, opened, io, arena, files_data.dir) catch &.{};
                             issues_data.excerpt = if (issues_data.selectedThread()) |entry| if (entry.record.event.anchor) |anchor| report_anchor.excerpt(repo_kind, opened.self_repo_opts, opened, io, arena, anchor) catch null else null else null;
                             var patches_data = try Patches.init(repo_kind, opened.self_repo_opts, arena, opened, io, session.haxy_moment, session, repo_id_maybe, repo_identity.identity, target_branch, patches_search, patches_selected, patches_comment, patches_comments_start, patches_theirs, patches_view, tabViewer(handle, repo, .patch));
                             if (repo_kind == .xit and session.data.host_kind == .server) {

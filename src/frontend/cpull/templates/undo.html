@@ -1,0 +1,27 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{% block content %}
+{{ ui.heading("Undo", "", "arrow-counterclockwise") }}
+<p class="tool-meta">The repository's {{ page.count }} transactions, newest first. Undoing one returns the repository to the state before it, which also undoes every transaction above it; the undo itself is a new transaction you can undo.</p>
+{% if page.failure %}<div class="alert alert-danger py-2" role="alert">The last undo failed: {{ page.failure }}</div>{% endif %}
+{% if page.first %}<div class="small mb-2"><a href="{{ page.first }}">Back to the newest</a></div>{% endif %}
+<div class="table-responsive">
+<table class="table table-sm align-middle cpull-undo">
+  <thead><tr><th>#</th><th>Action</th><th>What</th><th>When</th><th></th></tr></thead>
+  <tbody>
+  {% for r in page.rows %}
+  <tr class="{% if r.undone %}text-body-secondary cpull-undone{% endif %}{% if r.selected %} table-active{% endif %}" id="undo-{{ r.index }}">
+    <td><a href="{{ r.href }}">{{ r.index }}</a></td>
+    <td><code>{{ r.action }}</code>{% if r.undone %} <span class="badge text-bg-secondary">undone</span>{% endif %}</td>
+    <td>{% if r.details %}{% for d in r.details %}<div><span class="text-body-secondary small">{{ d.label }}</span> {% if d.href %}<a href="{{ d.href }}">{{ d.text }}</a>{% else %}{{ d.text }}{% endif %}</div>{% endfor %}{% else %}<span class="cpull-undo-text">{{ r.description }}</span>{% endif %}</td>
+    <td class="text-nowrap small">{{ ui.time(r.time) }}</td>
+    <td class="text-end text-nowrap">{% if r.form %}<form method="post" action="{{ r.form }}"><button class="btn btn-sm btn-outline-secondary py-0" type="submit" title="{{ r.label }}"><i class="bi bi-arrow-counterclockwise"></i> Undo</button></form>{% elif r.index == 0 %}<span class="small text-body-secondary">{{ r.label }}</span>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5" class="text-body-secondary">No history yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{{ ui.pager("", page.next, "", "Older transactions") }}
+{% endblock %}

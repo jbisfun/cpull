@@ -118,10 +118,14 @@ pub const Layout = struct {
     icon: []const u8 = "",
 };
 
-// a relative time with its exact UTC form, for the `time` macro
+// a time for the `time` macro: shown as `local` (the reader's wall clock)
+// when set, else `relative`, with `utc` and `relative` in its title
 pub const Time = struct {
     relative: []const u8,
+    // machine-readable, for the datetime attribute
     exact: []const u8 = "",
+    local: []const u8 = "",
+    utc: []const u8 = "",
 };
 
 // html the template must not escape (rendered markdown, prebuilt fragments)
@@ -169,6 +173,23 @@ pub fn render(
         std.log.err("theme: can't render {s}: {s}: {f}", .{ name, @errorName(err), diag });
         return err;
     };
+}
+
+// loads (parses) every template of the theme and `app`, for an app's tests
+pub fn parseAll(comptime app: []const Template, gpa: std.mem.Allocator) !void {
+    const entries = comptime templates ++ app[0..app.len].*;
+    var map: vin.MapLoader = .{ .entries = &entries };
+    var env = try vin.Environment.initWithLoader(gpa, .{ .autoescape = true, .trim_blocks = true, .lstrip_blocks = true }, map.loader());
+    defer env.deinit();
+    var diag: vin.Diagnostic = .{};
+    env.withDiag(&diag);
+    for (entries) |entry| {
+        var template = env.getTemplate(entry.name) catch |err| {
+            std.log.err("theme: can't load {s}: {s}: {f}", .{ entry.name, @errorName(err), diag });
+            return err;
+        };
+        template.deinit();
+    }
 }
 
 test "a page extending the layout renders the chrome and escapes data" {

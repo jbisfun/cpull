@@ -2381,6 +2381,19 @@ pub const WorkspaceHost = struct {
     source: *const fn (ctx: *anyopaque, identity: []const u8) ?RepoSource,
     // merge a stack and record its pins; returns what to tell the user
     merge: *const fn (ctx: *anyopaque, arena: *std.heap.ArenaAllocator, id: []const u8) anyerror![]const u8,
+    // the workspace's repos, cheaply (no repo is opened), for the sidebar of
+    // the pages that aren't workspace pages
+    repos: ?*const fn (ctx: *anyopaque, arena: *std.heap.ArenaAllocator) anyerror![]const WorkspaceRepo = null,
+    // merge one open patch of the repo an identity names into its target
+    // branch; returns what to tell the user
+    merge_patch: ?*const fn (ctx: *anyopaque, arena: *std.heap.ArenaAllocator, identity: []const u8, patch_id: []const u8) anyerror![]const u8 = null,
+};
+
+// one workspace repo as a non-workspace page's sidebar lists it
+pub const WorkspaceRepo = struct {
+    name: []const u8,
+    // "<workspace>:<key>", its pages' url identity
+    identity: []const u8,
 };
 
 // where a repo page reads its on-disk repo from
@@ -2869,6 +2882,9 @@ pub const Session = struct {
         workspace: ?[]const u8 = null,
         // what the last workspace action reported
         workspace_flash: ?[]const u8 = null,
+        // workspace mode: every repo of the workspace, for the sidebar of a
+        // repo page (a frontend's renderHtml gets only the page and this data)
+        workspace_repos: []const WorkspaceRepo = &.{},
     };
 
     pub fn init(

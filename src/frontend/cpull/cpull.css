@@ -53,3 +53,34 @@
 .cpull-flag-icon { margin-right: 0.3rem; }
 .cpull-report .card-footer code.cpull-quote { white-space: pre-wrap; }
 .cpull-report-list { margin-top: 0.35rem; }
+
+/* The branch/tag picker over the files and commits views. */
+.cpull-picker .btn code { color: inherit; }
+.cpull-picker-menu { max-height: 24rem; overflow-y: auto; font-size: 0.85rem; }
+
+/* Attachments in a thread's side column: image thumbnails over their names. */
+.cpull-attachment { margin-bottom: 0.4rem; }
+.cpull-attachment-thumb { display: block; max-width: 100%; max-height: 8rem; border: 1px solid var(--bs-border-color); border-radius: 4px; margin-bottom: 0.15rem; }
+
+/* The "report this line" form: folded in the file header, or under a line. */
+.cpull-report-details > summary { cursor: pointer; width: fit-content; }
+.cpull-report-details[open] > summary { margin-bottom: 0.4rem; }
+.cpull-report-line { width: 8rem; }
+.cpull-report-title { flex: 1 1 16rem; }
+.cpull-code tr.cpull-report-row td { white-space: normal; font-family: var(--bs-body-font-family); font-size: 0.85rem; padding: 0.5rem 0.75rem; background: var(--bs-body-bg); border-top: 1px solid var(--wiki-code-border); border-bottom: 1px solid var(--wiki-code-border); }
+.cpull-code tr.cpull-selected { background: #fff6c8; }
+[data-bs-theme="dark"] .cpull-code tr.cpull-selected, [data-bs-theme="dark"] .cpull-code tr:target { background: rgba(255, 214, 10, 0.16); }
+
+/* Resolving a conflict: the two versions side by side, the picked one outlined. */
+.cpull-version-text { white-space: pre-wrap; font-family: var(--wiki-mono); font-size: 0.8rem; background: transparent; }
+.cpull-version-picked { border-color: var(--wiki-select-border); box-shadow: 0 0 0 1px var(--wiki-select-border); }
+.cpull-chunk { white-space: pre-wrap; font-family: var(--wiki-mono); font-size: 0.8rem; padding: 0.4rem 0.6rem; margin: 0; background: var(--wiki-code-bg); border: 1px solid var(--wiki-code-border); border-radius: 4px; }
+.cpull-chunk-auto { white-space: normal; border-style: dashed; }
+.cpull-chunk-auto pre { white-space: pre-wrap; font-size: 0.8rem; }
+
+/* The undo history: long descriptions wrap, undone rows are struck through. */
+.cpull-undo-text { white-space: pre-wrap; }
+.cpull-undone code, .cpull-undone .cpull-undo-text { text-decoration: line-through; }
+
+/* report flags keep their colour inside the line-number gutter's links */
+.cpull-code .cpull-num a.cpull-flag-icon { color: #d08700; }

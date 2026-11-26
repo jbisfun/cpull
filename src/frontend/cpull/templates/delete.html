@@ -1,0 +1,13 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{#- Permanently deleting something: {noun, text, action, confirm_text, typed, error_text}. -#}
+{% block content %}
+{{ ui.heading("Delete this " ~ page.noun, "", "trash") }}
+{% if page.error_text %}<div class="alert alert-danger py-2" role="alert">{{ page.error_text }}</div>{% endif %}
+<form method="post" action="{{ page.action }}" style="max-width: 32rem">
+  <div class="alert alert-danger">{{ page.text }} This can't be undone.</div>
+  {{ ui.field("Type " ~ page.confirm_text ~ " to confirm", "confirm", page.typed, "", false, true, true) }}
+  <div class="mb-3"><label class="form-label" for="f-password">Your password</label><input class="form-control" type="password" id="f-password" name="password" autocomplete="current-password" required></div>
+  <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-trash"></i> Permanently delete this {{ page.noun }}</button>
+</form>
+{% endblock %}

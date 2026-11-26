@@ -177,6 +177,8 @@ pub fn build(b: *std.Build) void {
             }),
         });
         exe.root_module.addImport("cpull", cpull);
+        // the demo server renders the same web UI as the cpull exe
+        addFrontend(b, exe.root_module, vin_mod, frontend == .wiki);
         const try_install = b.addInstallArtifact(exe, .{});
 
         const run_cmd = b.addRunArtifact(exe);

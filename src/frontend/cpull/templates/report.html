@@ -38,3 +38,72 @@
 </ul>
 {% endif %}
 {%- endmacro %}
+
+
+{#- The "report this line" form, {action, file, ref, value}: without javascript
+    it sits folded in the file's header, taking a line number; clicking a line
+    number moves it under that line (`script`). It posts to web.zig's report
+    route, which files the report and shows the new issue. -#}
+{% macro form(r) -%}
+<details class="cpull-report-details small mt-1" id="cpull-report-details">
+  <summary class="text-body-secondary"><i class="bi bi-flag"></i> Report a line</summary>
+  <form class="cpull-report-form" id="cpull-report" method="post" action="{{ r.action }}">
+    <input type="hidden" name="file" value="{{ r.file }}">
+    <input type="hidden" name="ref" value="{{ r.ref }}">
+    <input type="hidden" name="value" value="{{ r.value }}">
+    <input type="hidden" name="quote" value="">
+    <div class="d-flex flex-wrap gap-2 align-items-start">
+      <label class="input-group input-group-sm cpull-report-line"><span class="input-group-text">Line</span><input class="form-control" name="line" type="number" min="1" required></label>
+      <input class="form-control form-control-sm cpull-report-title" name="title" placeholder="Title (defaults to the note's first line)" autocomplete="off">
+    </div>
+    <textarea class="form-control form-control-sm font-monospace mt-2" name="note" rows="3" placeholder="What's wrong here? (markdown)"></textarea>
+    <div class="d-flex gap-2 mt-2">
+      <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-flag-fill"></i> File report</button>
+      <button class="btn btn-sm btn-outline-secondary cpull-report-cancel" type="button" hidden>Cancel</button>
+    </div>
+  </form>
+</details>
+{%- endmacro %}
+
+{#- Moves the report form under a clicked line number, with the selected text as its quote. -#}
+{% macro script() -%}
+<script>
+(() => {
+  const form = document.getElementById("cpull-report");
+  const details = document.getElementById("cpull-report-details");
+  if (!form || !details) return;
+  const cancel = form.querySelector(".cpull-report-cancel");
+  let row = null, selected = null;
+  const close = () => {
+    if (row) row.remove();
+    if (selected) selected.classList.remove("cpull-selected");
+    details.appendChild(form);
+    cancel.hidden = true;
+  };
+  cancel.addEventListener("click", close);
+  document.querySelectorAll(".cpull-code a.cpull-lineno").forEach((a) => a.addEventListener("click", (e) => {
+    e.preventDefault();
+    const tr = a.closest("tr");
+    const line = tr.id.slice(1);
+    const quote = String(getSelection() || "").trim();
+    history.replaceState(null, "", "#L" + line);
+    if (selected) selected.classList.remove("cpull-selected");
+    selected = tr;
+    tr.classList.add("cpull-selected");
+    if (!row) {
+      row = document.createElement("tr");
+      row.className = "cpull-report-row";
+      const td = document.createElement("td");
+      td.colSpan = tr.children.length;
+      row.appendChild(td);
+    }
+    row.firstChild.appendChild(form);
+    tr.after(row);
+    cancel.hidden = false;
+    form.elements.line.value = line;
+    form.elements.quote.value = quote;
+    form.elements.note.focus();
+  }));
+})();
+</script>
+{%- endmacro %}

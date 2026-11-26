@@ -14,6 +14,8 @@ const Ctx = @import("ctx.zig").Ctx;
 const workspace_views = @import("views/workspace.zig");
 const repo_views = @import("views/repo.zig");
 const site_views = @import("views/site.zig");
+const fork_views = @import("views/fork.zig");
+const highlight = @import("../../wiki/highlight.zig");
 
 pub const site_name = "cpull";
 
@@ -28,7 +30,8 @@ pub const frontend: web.Frontend = .{
 const files = blk: {
     var list: [theme.assets.len + 2]web.Embed = undefined;
     list[0] = .{ .path = "index.html", .content_type = "text/html; charset=utf-8", .body = "{{{ CPULL_HTML }}}" };
-    list[1] = .{ .path = "assets/cpull.css", .content_type = "text/css; charset=utf-8", .body = @embedFile("cpull.css") };
+    // the wiki highlighter's token colours follow cpull's rules (file view)
+    list[1] = .{ .path = "assets/cpull.css", .content_type = "text/css; charset=utf-8", .body = @embedFile("cpull.css") ++ highlight.css };
     for (theme.assets, 2..) |asset, i| list[i] = .{ .path = asset.path, .content_type = asset.content_type, .body = asset.body };
     break :blk list;
 };
@@ -50,6 +53,11 @@ pub const templates = [_]theme.Template{
     .{ .name = "message.html", .source = @embedFile("templates/message.html") },
     .{ .name = "about.html", .source = @embedFile("templates/about.html") },
     .{ .name = "user.html", .source = @embedFile("templates/user.html") },
+    .{ .name = "resolve.html", .source = @embedFile("templates/resolve.html") },
+    .{ .name = "confirm.html", .source = @embedFile("templates/confirm.html") },
+    .{ .name = "settings.html", .source = @embedFile("templates/settings.html") },
+    .{ .name = "undo.html", .source = @embedFile("templates/undo.html") },
+    .{ .name = "delete.html", .source = @embedFile("templates/delete.html") },
 };
 
 // cpull's renderHtml hook: the whole document for one page
@@ -62,7 +70,7 @@ pub fn render(allocator: std.mem.Allocator, page: *const ui.Page, session: *cons
         .repo => |*data| try repo_views.page(c, writer, data),
         .home => |*data| try site_views.home(c, writer, data),
         .user => |*data| try site_views.user(c, writer, data),
-        .fork => |*data| try site_views.fork(c, writer, data),
+        .fork => |*data| try fork_views.page(c, writer, data),
         .not_found => try site_views.notFound(c, writer),
     }
 }
@@ -148,4 +156,8 @@ fn buildLayout(c: Ctx, chrome: Chrome) !theme.Layout {
         .stylesheets = &.{"/assets/cpull.css"},
         .icon = chrome.icon,
     };
+}
+
+test "every cpull template parses" {
+    try theme.parseAll(&templates, std.testing.allocator);
 }

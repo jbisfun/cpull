@@ -30,7 +30,9 @@ In the web UI
 
 * An anchored issue's page shows the code around the line. It is read at the anchor's commit, or else from the current file. In the current file, the line is found again by its text if it has moved, and the page says if the text has changed.
 
-* The files view flags the lines that open reports point at and lists those reports above the file. Each flag links to its issue.
+* The files view flags the lines that open reports point at and lists those reports above the file. Each flag links to its issue. Patch revision files and diffs (commit and patch diffs) flag them too: a diff flags the kept or added line that holds the report's text nearest its line number.
+
+* In local and workspace mode, clicking a line number in the files view opens a small form under the line (the text selected on the page becomes the quote). Without javascript, the same form sits folded in the file's header and takes a line number. It posts to `/<repo>/report`, which files the report at the commit the page shows, with `source` `web`, and opens the new issue.
 
 Migrating radar
 

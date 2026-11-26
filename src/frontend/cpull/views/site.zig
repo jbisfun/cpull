@@ -120,15 +120,6 @@ fn reposUrl(c: Ctx, name: ui.RoutablePage.Array(evt.User.name_max_len), start: u
     return c.routeUrl(route.withSearch(search));
 }
 
-// forks only exist on a server; their pages stay in cpull's classic UI
-pub fn fork(c: Ctx, w: *std.Io.Writer, data: *const ui.Fork) !void {
-    try fe.emit(c, w, .{ .title = data.header.name, .crumbs = &.{.{ .label = data.header.name }} }, "message.html", .{
-        .title = "Not in the web UI",
-        .text = "Fork pages aren't part of the themed web UI yet. Use cpull's terminal UI, or build cpull with -Dfrontend=classic.",
-        .links = &[_]theme.Link{.{ .label = "Home", .href = "/" }},
-    });
-}
-
 pub fn notFound(c: Ctx, w: *std.Io.Writer) !void {
     try fe.emit(c, w, .{ .title = "Not found", .crumbs = &.{.{ .label = "Not found" }} }, "message.html", .{
         .title = "Page not found",
