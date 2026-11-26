@@ -2,7 +2,9 @@
 //! for pages rebuild the site incrementally first (at most every few
 //! seconds; unchanged repos cost a `git status` each), then the file is
 //! served from `<root>/.pull/cpull/wiki/dist`. The site uses relative URLs,
-//! so it works under the /wiki/ prefix as it does on GitHub Pages.
+//! so it works under the /wiki/ prefix as it does on GitHub Pages. Pages get
+//! `forge_meta` on the way out, which switches on the forge features
+//! (forge.zig); dist/, which `cpull wiki publish` copies, never has it.
 const std = @import("std");
 const wiki = @import("wiki.zig");
 const Sys = @import("sys.zig").Sys;
@@ -64,10 +66,21 @@ pub fn handle(io: std.Io, gpa: std.mem.Allocator, request: *std.http.Server.Requ
             return request.respond("not found\n", .{ .status = .not_found, .extra_headers = &.{.{ .name = "content-type", .value = "text/plain; charset=utf-8" }} });
         };
     };
-    try request.respond(body, .{ .extra_headers = &.{
+    try request.respond(if (is_page) try live(sys.arena, body) else body, .{ .extra_headers = &.{
         .{ .name = "content-type", .value = contentType(rel) },
         .{ .name = "cache-control", .value = "no-cache" },
     } });
+}
+
+/// What turns the wiki's forge features on (assets/forge.js: the repo's
+/// cpull page, issues, CI, the reports on a page, filing a report from the
+/// right-click menu): a meta tag naming the api (forge.zig), added to the
+/// pages served here and never to dist/, so the published site stays static.
+pub const forge_meta = "<meta name=\"cpull-wiki\" content=\"" ++ prefix ++ "/_cpull\">";
+
+fn live(arena: std.mem.Allocator, page: []const u8) ![]const u8 {
+    const head = std.mem.indexOf(u8, page, "</head>") orelse return page;
+    return std.mem.concat(arena, u8, &.{ page[0..head], "  ", forge_meta, "\n", page[head..] });
 }
 
 fn rebuild(sys: Sys, paths: wiki.Paths, now: i64) void {
@@ -133,4 +146,8 @@ test "wiki paths" {
     try std.testing.expect(matches("/wiki"));
     try std.testing.expect(!matches("/wikis"));
     try std.testing.expectEqualStrings("text/css; charset=utf-8", contentType("_assets/style.css"));
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    try std.testing.expectEqualStrings("<html><head><title>x</title>  " ++ forge_meta ++ "\n</head></html>", try live(arena.allocator(), "<html><head><title>x</title></head></html>"));
+    try std.testing.expectEqualStrings("no head", try live(arena.allocator(), "no head"));
 }

@@ -11,5 +11,6 @@ comptime {
     _ = @import("test/report.zig");
     _ = @import("report/report.zig");
     _ = @import("report/anchor.zig");
+    _ = @import("wiki/forge.zig");
     _ = @import("pullfile.zig");
 }
