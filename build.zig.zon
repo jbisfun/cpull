@@ -16,6 +16,22 @@
             .url = "git+https://github.com/deatil/zig-vin#b7d184c0ef97dd9c586f8ab0710166a57032e57f",
             .hash = "zig_vin-0.2.7-Lkc0nLJICgDWSw2UYdRvLZxglhIEyQlUSRML4v5Y_SNn",
         },
+        .cmark_gfm = .{
+            .url = "https://github.com/github/cmark-gfm/archive/refs/tags/0.29.0.gfm.13.tar.gz",
+            .hash = "N-V-__8AACaGFwDmjLKFjd0jlhijuVlTuOCGoRVvp406CsLD",
+        },
+        .toml = .{
+            .url = "git+https://github.com/sam701/zig-toml?ref=zig-0.17#4a13e49ce7d19ac2df8b87962d9f23c0f5dd5bdd",
+            .hash = "toml-0.3.0-bV14BRmkAQDSILPPyXc31aAXPtJa1Uh8Frug3i6InAUc",
+        },
+        .superhtml = .{
+            .url = "git+https://github.com/kristoff-it/superhtml#b00f3d25e7e8103d18c08961ca39be7c282923ed",
+            .hash = "superhtml-0.7.1-Y7MdPL6bJgC9-jD4-EKen7iR9BOO6PGeWNQVlpWa-8Xx",
+        },
+        .uucode = .{
+            .url = "git+https://github.com/jacobsandlund/uucode#1fb73433bba5d93366c57f23ff2e9d7939746500",
+            .hash = "uucode-0.2.0-ZZjBPm6FVgBcY-79AHV8ckQj86z0JwOyVyj89VeZrEiv",
+        },
     },
     .paths = .{
         "build.zig",
