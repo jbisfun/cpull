@@ -25,6 +25,7 @@ const cookie_name = "cpull_session";
 const session_cookie_fmt = cookie_name ++ "={s}; Path=/; HttpOnly; SameSite=Lax; Max-Age=34560000";
 const form_flash_cookie = "cpull_form_flash";
 const wiki_serve = @import("wiki/serve.zig");
+const wiki_forge = @import("wiki/forge.zig");
 const local_flash_cookie = "cpull_local_flash";
 const local_required_title_prefix = "required_title:";
 const local_sync_failure_prefix = "sync:";
@@ -227,6 +228,13 @@ fn handleRequest(
             return mount.handle(mount.ctx, io, request, allocator, owned_target orelse request.head.target),
         .server => {},
     }
+
+    // the live wiki's forge api (/wiki/_cpull/: issue counts, reports, filing
+    // a report from the right-click menu), over the workspace's repos
+    if (host == .local) if (host.local.workspace) |workspace| if (wiki_forge.matches(path)) {
+        if (method == .POST and !isSameOrigin(request)) return respondForbidden(request);
+        return wiki_forge.handle(io, allocator, request, @ptrCast(@alignCast(workspace.ctx)), owned_target orelse request.head.target);
+    };
 
     // POST routes can be scoped by any page, so they can redirect using
     // the base of the URL. this allows logging in to keep you on the page

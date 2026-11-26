@@ -155,4 +155,5 @@ test {
     _ = @import("apidoc.zig");
     _ = @import("bundle.zig");
     _ = @import("serve.zig");
+    _ = @import("highlight.zig");
 }

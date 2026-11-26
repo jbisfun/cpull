@@ -280,23 +280,47 @@ fn addWiki(b: *std.Build, module: *std.Build.Module, vin_mod: *std.Build.Module,
     // and queries/highlights.scm as an anonymous import for @embedFile)
     const ts = b.dependency("tree_sitter", .{ .target = target, .optimize = optimize, .amalgamated = true });
     module.linkLibrary(ts.artifact("tree-sitter"));
-    // (name, has an external scanner); a library each, for its own headers
-    inline for (.{ .{ "bash", true }, .{ "json", false }, .{ "rust", true }, .{ "python", true }, .{ "javascript", true }, .{ "yaml", true }, .{ "toml", true }, .{ "zig", false }, .{ "lua", true }, .{ "diff", false } }) |grammar| {
+    // (name, package, source dir, has an external scanner, highlights query);
+    // a library each, for its own headers
+    inline for (.{
+        .{ "bash", "bash", "src", true, "queries/highlights.scm" },
+        .{ "json", "json", "src", false, "queries/highlights.scm" },
+        .{ "rust", "rust", "src", true, "queries/highlights.scm" },
+        .{ "python", "python", "src", true, "queries/highlights.scm" },
+        .{ "javascript", "javascript", "src", true, "queries/highlights.scm" },
+        .{ "yaml", "yaml", "src", true, "queries/highlights.scm" },
+        .{ "toml", "toml", "src", true, "queries/highlights.scm" },
+        .{ "zig", "zig", "src", false, "queries/highlights.scm" },
+        .{ "lua", "lua", "src", true, "queries/highlights.scm" },
+        .{ "diff", "diff", "src", false, "queries/highlights.scm" },
+        .{ "c", "c", "src", false, "queries/highlights.scm" },
+        .{ "objc", "objc", "src", false, "queries/highlights.scm" },
+        .{ "swift", "swift", "src", true, "queries/highlights.scm" },
+        .{ "html", "html", "src", true, "queries/highlights.scm" },
+        .{ "css", "css", "src", true, "queries/highlights.scm" },
+        .{ "typescript", "typescript", "typescript/src", true, "queries/highlights.scm" },
+        .{ "tsx", "typescript", "tsx/src", true, "queries/highlights.scm" },
+        .{ "xml", "xml", "xml/src", true, "queries/xml/highlights.scm" },
+        .{ "markdown", "markdown", "tree-sitter-markdown/src", true, "tree-sitter-markdown/queries/highlights.scm" },
+        .{ "ruby", "ruby", "src", true, "queries/highlights.scm" },
+        .{ "make", "make", "src", false, "queries/highlights.scm" },
+        .{ "ini", "ini", "src", false, "queries/highlights.scm" },
+    }) |grammar| {
         const name = grammar[0];
-        const dep = b.dependency("ts_" ++ name, .{});
+        const dep = b.dependency("ts_" ++ grammar[1], .{});
         const glib = b.addLibrary(.{
             .linkage = .static,
             .name = "tree-sitter-" ++ name,
             .root_module = b.createModule(.{ .target = target, .optimize = optimize, .link_libc = true, .sanitize_c = .off }),
         });
-        glib.root_module.addIncludePath(dep.path("src"));
+        glib.root_module.addIncludePath(dep.path(grammar[2]));
         glib.root_module.addCSourceFiles(.{
-            .root = dep.path("src"),
-            .files = if (grammar[1]) &.{ "parser.c", "scanner.c" } else &.{"parser.c"},
+            .root = dep.path(grammar[2]),
+            .files = if (grammar[3]) &.{ "parser.c", "scanner.c" } else &.{"parser.c"},
             .flags = &.{"-std=c11"},
         });
         module.linkLibrary(glib);
-        module.addAnonymousImport("ts_" ++ name ++ "_highlights", .{ .root_source_file = dep.path("queries/highlights.scm") });
+        module.addAnonymousImport("ts_" ++ name ++ "_highlights", .{ .root_source_file = dep.path(grammar[4]) });
     }
     module.addImport("regex", b.dependency("regex", .{ .target = target, .optimize = optimize }).module("regex"));
     module.addImport("vin", vin_mod);
