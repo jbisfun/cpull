@@ -8,7 +8,7 @@
   <thead><tr><th>Name</th><th>Description</th></tr></thead>
   <tbody>
   {% for r in page.rows %}
-    <tr><td><i class="bi bi-{{ r.icon }} text-body-secondary me-1"></i><a class="fw-semibold" href="{{ r.href }}">{{ r.label }}</a></td><td class="text-body-secondary">{{ r.detail }}</td></tr>
+    <tr><td><i class="bi bi-{{ r.icon }} text-body-secondary me-1"></i><a class="fw-semibold cpull-repo" href="{{ r.href }}">{{ r.avatar }}{{ r.label }}</a></td><td class="text-body-secondary">{{ r.detail }}</td></tr>
   {% else %}
     <tr><td colspan="2" class="text-body-secondary">{{ page.empty }}</td></tr>
   {% endfor %}

@@ -10,6 +10,8 @@
 //! them with `render`, passing a `Layout` as `layout` plus its own data.
 const std = @import("std");
 pub const vin = @import("vin");
+// identicon avatars (a port of identicon.js), e.g. for repo names
+pub const identicon = @import("identicon.zig");
 
 pub const Asset = struct {
     // the request path without its leading slash, e.g. "assets/style.css"
@@ -44,6 +46,8 @@ pub const Link = struct {
     icon: []const u8 = "",
     count: ?usize = null,
     title: []const u8 = "",
+    // an identicon (see `avatar`) drawn before the label, for a crumb
+    avatar: vin.Str = markup(""),
 };
 
 // a row of a sidebar group
@@ -55,6 +59,8 @@ pub const Row = struct {
     icon: []const u8 = "",
     // a status ball's status (see .ball-* in style.css), drawn instead of the icon
     ball: []const u8 = "",
+    // an identicon (see `avatar`), drawn after the ball or icon
+    avatar: vin.Str = markup(""),
     active: bool = false,
     title: []const u8 = "",
 };
@@ -108,6 +114,8 @@ pub const Layout = struct {
     footer: []const Link = &.{},
     // extra stylesheets after the theme's, for the app's own rules
     stylesheets: []const []const u8 = &.{},
+    // an svg favicon in place of the theme's (e.g. a repo's identicon url)
+    icon: []const u8 = "",
 };
 
 // a relative time with its exact UTC form, for the `time` macro
@@ -119,6 +127,13 @@ pub const Time = struct {
 // html the template must not escape (rendered markdown, prebuilt fragments)
 pub fn markup(html: []const u8) vin.Str {
     return .{ .bytes = html, .safe = true };
+}
+
+// `name`'s identicon as inline svg markup: a rounded tile sized by `class`
+// ("cpull-identicon-sm" sidebar/table rows, "-md" table names, "-lg"
+// headings; see style.css), coloured for light and dark by the theme
+pub fn avatar(arena: std.mem.Allocator, name: []const u8, class: []const u8) !vin.Str {
+    return markup(try identicon.tileFor(arena, name, .{ .class = class }));
 }
 
 // renders template `name` from the theme's and `app` templates with `context`
@@ -176,4 +191,32 @@ test "a page extending the layout renders the chrome and escapes data" {
     try std.testing.expect(std.mem.indexOf(u8, html, "wiki-globalnav") != null);
     try std.testing.expect(std.mem.indexOf(u8, html, "<p>&lt;b&gt;</p>") != null);
     try std.testing.expect(std.mem.indexOf(u8, html, "ball-open") != null);
+}
+
+test "avatars render unescaped in sidebar rows, crumbs and headings" {
+    const app = [_]Template{.{ .name = "page.html", .source = "{% extends \"theme/layout.html\" %}{% import \"theme/macros.html\" as ui %}{% block content %}{{ ui.heading(\"repo\", \"\", \"\", avatar) }}{% endblock %}" }};
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const aa = arena.allocator();
+    var out: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer out.deinit();
+    try render(&app, std.testing.allocator, aa, "page.html", .{
+        .layout = Layout{
+            .title = "t",
+            .site = "tool",
+            .icon = "/o:repo/icon.svg",
+            .crumbs = &.{ .{ .label = "Home", .href = "/" }, .{ .label = "repo", .href = "/o:repo", .avatar = try avatar(aa, "repo", "cpull-identicon-sm") } },
+            .groups = &.{.{ .title = "Repos", .rows = &.{.{ .label = "repo", .href = "/o:repo", .avatar = try avatar(aa, "repo", "cpull-identicon-sm") }} }},
+        },
+        .avatar = try avatar(aa, "repo", "cpull-identicon-lg"),
+    }, &out.writer);
+    const html = out.written();
+    try std.testing.expectEqual(3, std.mem.count(u8, html, "<svg xmlns="));
+    try std.testing.expect(std.mem.indexOf(u8, html, "class='cpull-identicon cpull-identicon-lg'") != null);
+    try std.testing.expect(std.mem.indexOf(u8, html, "href=\"/o:repo/icon.svg\" type=\"image/svg+xml\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, html, "&lt;svg") == null);
+}
+
+test {
+    _ = identicon;
 }

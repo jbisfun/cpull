@@ -25,8 +25,8 @@
   {% for r in page.repos %}
     <tr>
       <td class="text-center">{{ ui.ball(r.ball, "ball-lg", r.state) }}</td>
-      <td><a class="fw-semibold" href="{{ r.href }}">{{ r.name }}</a>
-        <div class="small text-body-secondary">{% if r.cloned %}<i class="bi bi-git"></i> {{ r.head_branch }}@{{ r.head }}{% if r.off_branch %} <span class="badge text-bg-warning">off branch</span>{% endif %}{% else %}not cloned{% endif %}</div></td>
+      <td><div class="d-flex align-items-center gap-2">{{ r.avatar }}<div><a class="fw-semibold" href="{{ r.href }}">{{ r.name }}</a>
+        <div class="small text-body-secondary">{% if r.cloned %}<i class="bi bi-git"></i> {{ r.head_branch }}@{{ r.head }}{% if r.off_branch %} <span class="badge text-bg-warning">off branch</span>{% endif %}{% else %}not cloned{% endif %}</div></div></div></td>
       <td>{{ r.branch }}</td>
       <td>{% if r.pin %}{{ r.pin }}{% else %}N/A{% endif %}</td>
       <td>{{ r.state }}</td>
@@ -64,7 +64,7 @@
   {% for r in page.list %}
     <tr>
       <td class="text-center">{{ ui.ball(r.ball, "", r.status or "open") }}</td>
-      <td>{% if r.first_of_repo %}<a href="{{ r.repo_href }}">{{ r.repo }}</a>{% endif %}</td>
+      <td>{% if r.first_of_repo %}<a class="cpull-repo" href="{{ r.repo_href }}">{{ r.repo_avatar }}{{ r.repo }}</a>{% endif %}</td>
       <td><a class="fw-semibold" href="{{ r.href }}">{{ r.title }}</a></td>
       <td>{% if page.view == "issues" %}{% for l in r.labels %}<span class="badge rounded-pill text-bg-secondary haxy-label">{{ l }}</span> {% endfor %}{% else %}<code>{{ r.detail }}</code>{% endif %}</td>
     </tr>

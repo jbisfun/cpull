@@ -58,6 +58,11 @@ pub const Ctx = struct {
         return c.url(.{ .user_repos = .{ .name = parsed } });
     }
 
+    // a repo's identicon, from its haxy repo name (see repoIconName)
+    pub fn repoAvatar(c: Ctx, name: []const u8, class: []const u8) !theme.vin.Str {
+        return theme.avatar(c.aa(), try repoIconName(c.aa(), name), class);
+    }
+
     pub fn author(c: Ctx, value: ui.Author) !Person {
         return switch (value) {
             .unknown => .{ .name = "someone" },
@@ -72,6 +77,17 @@ pub const Person = struct {
     name: []const u8,
     href: []const u8 = "",
 };
+
+// the name a repo's identicon is drawn from, the same one /<repo>/icon.svg
+// uses: the haxy repo name, i.e. an "owner:name" identity's name, with a
+// nested pullfile repo's "group/name" as the "group.name" its identity holds
+pub fn repoIconName(arena: std.mem.Allocator, name_or_identity: []const u8) ![]const u8 {
+    const name = if (std.mem.lastIndexOfScalar(u8, name_or_identity, ':')) |i| name_or_identity[i + 1 ..] else name_or_identity;
+    if (std.mem.indexOfScalar(u8, name, '/') == null) return name;
+    const key = try arena.dupe(u8, name);
+    std.mem.replaceScalar(u8, key, '/', '.');
+    return key;
+}
 
 pub fn short(oid: []const u8) []const u8 {
     return oid[0..@min(oid.len, 10)];

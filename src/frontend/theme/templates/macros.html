@@ -64,9 +64,10 @@
 </div>
 {%- endmacro %}
 
-{#- The page heading of idlci's project/job pages: a ball (status) or icon, then the title. -#}
-{% macro heading(title, status="", icon="") -%}
-<h1 class="tool-heading">{% if status %}{{ ball(status, "ball-lg") }}{% elif icon %}<i class="bi bi-{{ icon }}"></i>{% endif %}<span>{{ title }}</span></h1>
+{#- The page heading of idlci's project/job pages: a ball (status) or icon, then the title.
+    `avatar` (theme.avatar markup, e.g. a repo's identicon) replaces the icon. -#}
+{% macro heading(title, status="", icon="", avatar="") -%}
+<h1 class="tool-heading">{% if status %}{{ ball(status, "ball-lg") }}{% endif %}{% if avatar %}{{ avatar }}{% elif icon and not status %}<i class="bi bi-{{ icon }}"></i>{% endif %}<span>{{ title }}</span></h1>
 {%- endmacro %}
 
 {#- A "Back to …" sidebar task (put in the layout's tasks_before block). -#}

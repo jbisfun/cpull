@@ -90,6 +90,7 @@ pub fn user(c: Ctx, w: *std.Io.Writer, data: *const ui.User) !void {
         try rows.append(aa, .{
             .label = repo.event.name,
             .href = try c.routeUrl(ui.RoutablePage.repoFilesRoute(identity, null, "", "", 0)),
+            .avatar = try c.repoAvatar(repo.event.name, "cpull-identicon-sm"),
             .detail = repo.event.description,
             .icon = if (repo.event.read_access == .private) "lock" else "hdd",
         });

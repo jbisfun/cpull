@@ -12,6 +12,9 @@ const Workspace = ui.Workspace;
 
 const RepoRow = struct {
     name: []const u8,
+    avatar: theme.vin.Str,
+    // what repoAvatar draws from, for the sidebar's smaller copy
+    icon_name: []const u8,
     href: []const u8,
     group: []const u8,
     ball: []const u8,
@@ -32,6 +35,7 @@ const RepoRow = struct {
 
 const ListRow = struct {
     repo: []const u8,
+    repo_avatar: theme.vin.Str,
     repo_href: []const u8,
     title: []const u8,
     href: []const u8,
@@ -86,6 +90,7 @@ pub fn page(c: Ctx, w: *std.Io.Writer, data: *const Workspace) !void {
         .label = repo.name,
         .href = repo.href,
         .ball = repo.ball,
+        .avatar = try c.repoAvatar(repo.icon_name, "cpull-identicon-sm"),
         .title = try c.print("{s}; {d} open issues, {d} open patches", .{ repo.state, repo.issues, repo.patches }),
         .detail = if (repo.issues + repo.patches > 0) try c.print("{d} open", .{repo.issues + repo.patches}) else "",
     });
@@ -117,6 +122,7 @@ pub fn page(c: Ctx, w: *std.Io.Writer, data: *const Workspace) !void {
         .issues => for (data.issues) |issue| {
             try list.append(aa, .{
                 .repo = issue.repo,
+                .repo_avatar = try c.repoAvatar(issue.identity, "cpull-identicon-sm"),
                 .repo_href = try c.print("/{s}/issues", .{issue.identity}),
                 .title = issue.title,
                 .href = issue.url,
@@ -128,6 +134,7 @@ pub fn page(c: Ctx, w: *std.Io.Writer, data: *const Workspace) !void {
         .patches => for (data.patches) |patch| {
             try list.append(aa, .{
                 .repo = patch.repo,
+                .repo_avatar = try c.repoAvatar(patch.identity, "cpull-identicon-sm"),
                 .repo_href = try c.print("/{s}/patches", .{patch.identity}),
                 .title = patch.title,
                 .href = patch.url,
@@ -179,6 +186,8 @@ fn repoRow(c: Ctx, repo: Workspace.RepoRow) !RepoRow {
         .{ "clean", "at its pin" };
     return .{
         .name = repo.name,
+        .avatar = try c.repoAvatar(repo.identity, "cpull-identicon-md"),
+        .icon_name = repo.identity,
         .href = try c.print("/{s}", .{repo.identity}),
         .group = repo.group orelse "",
         .ball = ball,
@@ -200,6 +209,7 @@ fn repoRow(c: Ctx, repo: Workspace.RepoRow) !RepoRow {
 
 const Member = struct {
     repo: []const u8,
+    repo_avatar: theme.vin.Str,
     repo_href: []const u8,
     title: []const u8,
     href: []const u8,
@@ -225,6 +235,7 @@ fn stack(c: Ctx, w: *std.Io.Writer, chrome: fe.Chrome, data: *const Workspace) !
         const target = m.target_oid orelse "";
         try members.append(aa, .{
             .repo = m.repo,
+            .repo_avatar = try c.repoAvatar(m.identity orelse m.repo, "cpull-identicon-sm"),
             .repo_href = if (m.identity) |id| try c.print("/{s}", .{id}) else "",
             .title = if (m.title.len > 0) m.title else ctx.short(m.patch_id),
             .href = m.url orelse "",

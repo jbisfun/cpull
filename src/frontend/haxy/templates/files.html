@@ -14,7 +14,7 @@
 {% endif %}
 {%- endmacro %}
 {% block content %}
-{{ ui.heading(page.name, "", "hdd-stack") }}
+{{ ui.heading(page.name, "", "hdd-stack", page.avatar) }}
 <p class="tool-meta">{% if page.description %}{{ page.description }} · {% endif %}{% if page.no_commits %}no commits yet{% else %}<i class="bi bi-git"></i> {{ page.ref_kind }} <code>{{ page.ref_name }}</code>{% endif %}</p>
 {% if page.no_commits %}
 {{ ui.empty("No commits yet. Push a branch to see its files and history.") }}

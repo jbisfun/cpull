@@ -49,6 +49,7 @@ Running it as a server
 * Running `haxy --workspace DIR --web-listen ADDR` directly works too, but then nothing sets the repos' identity. Repos that pull hasn't set up yet refuse writes.
 
 * This is not `haxy serve`. That is the multi-user server with accounts, SSH and pushes; see [host.md](host.md).
+* Every repo gets an identicon, a GitHub-style 5x5 avatar drawn from the SHA-1 of its haxy name (`group/app` is `group.app`). The pages inline it next to repo names, and `/<workspace>:<repo>/icon.svg` serves it as a file (the repo pages' favicon). The drawing is a port of identicon.js in `src/frontend/theme/identicon.zig`.
 
 The events repo
 
