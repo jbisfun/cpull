@@ -6,6 +6,7 @@ const srv = @import("./serve.zig");
 const ui = @import("./ui.zig");
 const web = @import("./web.zig");
 const ws = @import("./workspace.zig");
+const ci = @import("./ci/ci.zig");
 
 // cook the terminal before a panic/segfault trace is printed, so the trace
 // isn't mangled by raw mode and the alternate buffer
@@ -23,6 +24,8 @@ pub const RunOpts = struct {
     global_config_path: ?[]const u8 = null,
     // false when NO_COLOR is set, so the TUI draws without colors
     color: bool = true,
+    // the process environment, which CI jobs inherit
+    environ: ?*const std.process.Environ.Map = null,
 };
 
 pub fn main(init: std.process.Init) !u8 {
@@ -57,10 +60,21 @@ pub fn main(init: std.process.Init) !u8 {
         .err = &stderr_writer.interface,
         .global_config_path = global_config_path,
         .color = std.mem.eql(u8, environ_map.get("NO_COLOR") orelse "", ""),
+        .environ = &environ_map,
     };
 
     const cwd_path = try std.process.currentPathAlloc(io, allocator);
     defer allocator.free(cwd_path);
+
+    // `cpull ci ...`: the CI's client commands
+    if (args.items.len > 0 and std.mem.eql(u8, args.items[0], "ci")) {
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+        const code = try ci.cli.run(io, arena.allocator(), args.items[1..], &environ_map, cwd_path, run_opts.out, run_opts.err);
+        try run_opts.out.flush();
+        try run_opts.err.flush();
+        return code;
+    }
 
     run(.xit, .{}, io, allocator, args.items, cwd_path, run_opts) catch |err| switch (err) {
         error.HandledError => return 1,
@@ -177,7 +191,24 @@ pub fn run(
                 }
             };
 
-            const local: web.LocalHost = if (workspace) |w| .{ .workspace = &w.host, .workspace_name = w.name } else .{ .source = found };
+            var local: web.LocalHost = if (workspace) |w| .{ .workspace = &w.host, .workspace_name = w.name } else .{ .source = found };
+            // a workspace runs its CI too, under /ci
+            var mounts: [1]web.Mount = undefined;
+            if (workspace) |w| if (run_opts.environ) |environ| {
+                const ci_app = ci.App.init(io, allocator, w.root, environ, .{
+                    .jobs = local_opts.ci_jobs,
+                    .watch = if (local_opts.ci_watch) local_opts.ci_watch_interval else null,
+                    .listen = local_opts.web_listen,
+                    .workspace_name = w.name,
+                }) catch |err| blk: {
+                    try run_opts.err.print("ci disabled: {s}\n", .{@errorName(err)});
+                    break :blk null;
+                };
+                if (ci_app) |app| {
+                    mounts[0] = .{ .prefix = ci.web.prefix, .ctx = app, .handle = ci.web.handle };
+                    local.mounts = &mounts;
+                }
+            };
             try srv.runLocal(io, allocator, local, local_opts.web_listen, run_opts.err, Runnable{ .io = io, .allocator = allocator, .session = &session });
         },
         .cli => |cli_cmd| switch (cli_cmd) {

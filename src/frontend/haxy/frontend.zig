@@ -82,6 +82,21 @@ pub fn emit(c: Ctx, w: *std.Io.Writer, chrome: Chrome, template: []const u8, dat
     try theme.render(&templates, c.gpa, c.aa(), template, .{ .layout = layout, .page = data }, w);
 }
 
+// the workspace server's global bar, shared with the features mounted beside
+// haxy's pages (src/ci); `active` names the current item
+pub fn workspaceNav(aa: std.mem.Allocator, active: []const u8) ![]const theme.Link {
+    const items = [_]struct { label: []const u8, href: []const u8, key: []const u8 }{
+        .{ .label = "Repositories", .href = "/", .key = "home" },
+        .{ .label = "Issues", .href = "/home/issues", .key = "issues" },
+        .{ .label = "Patches", .href = "/home/patches", .key = "patches" },
+        .{ .label = "Stacks", .href = "/home/stacks", .key = "stacks" },
+        .{ .label = "CI", .href = "/ci", .key = "ci" },
+    };
+    const out = try aa.alloc(theme.Link, items.len);
+    for (items, out) |item, *link| link.* = .{ .label = item.label, .href = item.href, .active = std.mem.eql(u8, item.key, active) };
+    return out;
+}
+
 fn buildLayout(c: Ctx, chrome: Chrome) !theme.Layout {
     const aa = c.aa();
     var nav: std.ArrayList(theme.Link) = .empty;
@@ -91,12 +106,7 @@ fn buildLayout(c: Ctx, chrome: Chrome) !theme.Layout {
     var flashes: std.ArrayList(theme.Flash) = .empty;
 
     if (c.workspace()) |name| {
-        try nav.appendSlice(aa, &.{
-            .{ .label = "Repositories", .href = "/", .active = std.mem.eql(u8, chrome.nav, "home") },
-            .{ .label = "Issues", .href = "/home/issues", .active = std.mem.eql(u8, chrome.nav, "issues") },
-            .{ .label = "Patches", .href = "/home/patches", .active = std.mem.eql(u8, chrome.nav, "patches") },
-            .{ .label = "Stacks", .href = "/home/stacks", .active = std.mem.eql(u8, chrome.nav, "stacks") },
-        });
+        try nav.appendSlice(aa, try workspaceNav(aa, chrome.nav));
         try badges.append(aa, .{ .label = name, .icon = "boxes", .title = "pull workspace" });
         try crumbs.append(aa, .{ .label = name, .href = "/" });
         try footer.append(aa, .{ .label = try c.print("pull workspace {s}", .{name}) });

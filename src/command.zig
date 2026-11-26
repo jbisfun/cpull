@@ -94,6 +94,10 @@ pub fn printHelp(cmd_kind_maybe: ?CommandKind, writer: *std.Io.Writer) !void {
             \\  --workspace DIR     view the pull workspace at DIR
             \\  --web-listen ADDR   no TUI: serve only the web UI on ADDR (like
             \\                      127.0.0.1:8080) until killed, e.g. as a pull job
+            \\a workspace also runs its idl projects' CI at /ci (`ci --help`):
+            \\  --ci-jobs N         concurrent CI jobs (default 1)
+            \\  --ci-watch          queue build + test when a project's HEAD moves
+            \\  --ci-watch-interval SECS  between HEAD polls (default 15)
             \\
             \\
         , .{});
@@ -135,6 +139,8 @@ pub const CommandArgs = struct {
         .{"--title"},
         .{"--description"},
         .{"--labels"},
+        .{"--ci-jobs"},
+        .{"--ci-watch-interval"},
     });
 
     pub fn init(allocator: std.mem.Allocator, args: []const []const u8) !CommandArgs {
@@ -241,6 +247,11 @@ pub const LocalOptions = struct {
     // serve only the web UI, on exactly this address, until killed: no TUI
     // and no accounts, for running as a background job
     web_listen: ?[]const u8 = null,
+    // the CI (src/ci) in a workspace: concurrent jobs, and whether to queue
+    // build + test when a project's git HEAD moves, polled every interval
+    ci_jobs: usize = 1,
+    ci_watch: bool = false,
+    ci_watch_interval: u64 = 15,
 };
 
 pub const Command = union(CommandKind) {
@@ -374,6 +385,9 @@ pub const CommandDispatch = union(enum) {
             var options: LocalOptions = .{};
             if (cmd_args.get("--workspace")) |value_maybe| options.workspace_path = value_maybe orelse return error.WorkspaceNeedsValue;
             if (cmd_args.get("--web-listen")) |value_maybe| options.web_listen = value_maybe orelse return error.WebListenNeedsValue;
+            if (cmd_args.get("--ci-jobs")) |value_maybe| options.ci_jobs = std.fmt.parseInt(usize, value_maybe orelse return error.CiJobsNeedsValue, 10) catch return error.InvalidCiJobs;
+            if (cmd_args.get("--ci-watch-interval")) |value_maybe| options.ci_watch_interval = std.fmt.parseInt(u64, value_maybe orelse return error.CiWatchIntervalNeedsValue, 10) catch return error.InvalidCiWatchInterval;
+            options.ci_watch = cmd_args.contains("--ci-watch");
             return .{ .local = options };
         }
     }

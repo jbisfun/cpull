@@ -57,6 +57,9 @@ pub fn build(b: *std.Build) void {
 
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    // the CI's job queue (src/ci); links libc. its C library is always built
+    // optimized, so debug builds of haxy don't run a debug SQLite
+    const sqlite_mod = b.dependency("sqlite", .{ .target = target, .optimize = .ReleaseFast }).module("sqlite");
 
     // main
     {
@@ -77,6 +80,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = wasm_exe.getEmittedBin(),
         });
         addFrontend(b, exe.root_module, vin_mod, frontend == .wiki);
+        exe.root_module.addImport("sqlite", sqlite_mod);
 
         const install_exe = b.addInstallArtifact(exe, .{});
         b.getInstallStep().dependOn(&install_exe.step);
@@ -112,6 +116,24 @@ pub fn build(b: *std.Build) void {
         });
         theme_tests.root_module.addImport("vin", vin_mod);
         test_step.dependOn(&b.addRunArtifact(theme_tests).step);
+
+        // the CI (src/ci), with the haxy frontend it renders beside
+        const ci_tests = b.addTest(.{
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/test_ci.zig"),
+                .target = target,
+                .optimize = optimize,
+            }),
+            .filters = test_filters,
+        });
+        ci_tests.root_module.addImport("xit", xit_dep.module("xit"));
+        ci_tests.root_module.addImport("xml", xml_mod);
+        ci_tests.root_module.addImport("ansi_art", ansi_art);
+        ci_tests.root_module.addImport("vin", vin_mod);
+        ci_tests.root_module.addImport("sqlite", sqlite_mod);
+        const run_ci_tests = b.addRunArtifact(ci_tests);
+        run_ci_tests.has_side_effects = true;
+        test_step.dependOn(&run_ci_tests.step);
     }
 
     // module for using haxy as a library
@@ -122,6 +144,8 @@ pub fn build(b: *std.Build) void {
     haxy.addImport("xit", xit_dep.module("xit"));
     haxy.addImport("xml", xml_mod);
     haxy.addImport("ansi_art", ansi_art);
+    haxy.addImport("sqlite", sqlite_mod);
+    haxy.addImport("vin", vin_mod);
     haxy.addAnonymousImport("haxy.wasm", .{
         .root_source_file = wasm_exe.getEmittedBin(),
     });
@@ -166,6 +190,7 @@ pub fn build(b: *std.Build) void {
         });
         // the network tests read haxy's own web UI
         addFrontend(b, server_exe.root_module, vin_mod, false);
+        server_exe.root_module.addImport("sqlite", sqlite_mod);
         const install_server_exe = b.addInstallArtifact(server_exe, .{});
 
         const unit_tests = b.addTest(.{

@@ -1,0 +1,70 @@
+{% extends "ci/base.html" %}
+{% import "ci/macros.html" as ci %}
+{% block tasks %}
+{{ ci.task("plus-square", "New Job", "#", 'data-bs-toggle="modal" data-bs-target="#new-job"') }}
+{{ ci.task("clock-history", "Build History", "/ci/jobs") }}
+{{ ci.task("hourglass-split", "Queue", "/ci/jobs?status=queued") }}
+{{ ci.task("x-octagon", "Failed Builds", "/ci/jobs?status=failed") }}
+{{ ci.task("eye" if base.watch else "eye-slash", "Polling SCM: " ~ ("on" if base.watch else "off (--ci-watch)"), "#") }}
+{{ ci.task("braces", "REST API", "/ci/api/projects") }}
+{% endblock %}
+{% block content %}
+<ul class="nav nav-tabs mb-0">
+  <li class="nav-item"><a class="nav-link active" href="/ci">All</a></li>
+</ul>
+<div class="table-responsive border border-top-0">
+<table class="table table-sm table-hover align-middle mb-0">
+  <thead><tr>
+    <th class="text-center" title="Status of the last build">S</th>
+    <th class="text-center" title="Weather report: recent build stability">W</th>
+    <th>Name <i class="bi bi-arrow-down-short"></i></th>
+    <th>Last Success</th>
+    <th>Last Failure</th>
+    <th>Last Duration</th>
+    <th>Latest</th>
+    <th></th>
+  </tr></thead>
+  <tbody>
+  {% for p in page.projects %}
+    <tr>
+      <td class="text-center">{{ ci.ball(p.ball, "ball-lg") }}</td>
+      <td class="text-center">{{ ci.weather(p.health, p.weather) }}</td>
+      <td><a class="fw-semibold" href="/ci/projects/{{ p.path }}">{{ p.path }}</a>
+        <div class="small text-body-secondary"><i class="bi bi-git"></i> {{ p.branch or "-" }}@{{ p.head or "-" }}{% if p.dirty %} <span class="badge text-bg-warning">dirty</span>{% endif %}</div></td>
+      <td>{% if p.last_success %}{{ p.last_success.finished_ago }} - <a href="/ci/jobs/{{ p.last_success.id }}">#{{ p.last_success.id }}</a>{% else %}N/A{% endif %}</td>
+      <td>{% if p.last_failure %}{{ p.last_failure.finished_ago }} - <a href="/ci/jobs/{{ p.last_failure.id }}">#{{ p.last_failure.id }}</a>{% else %}N/A{% endif %}</td>
+      <td>{% if p.last_build %}{{ p.last_build.dur }}{% else %}N/A{% endif %}</td>
+      <td class="small text-nowrap">{% for l in p.last %}<a class="me-2" href="/ci/jobs/{{ l.brief.id }}" title="{{ l.command }} #{{ l.brief.id }}: {{ l.brief.status }}">{{ ci.ball(l.brief.status) }} {{ l.command }}</a>{% endfor %}</td>
+      <td class="text-end text-nowrap">
+        <a class="btn btn-sm btn-link p-0 me-2 fs-5" href="#" data-queue="build" data-project="{{ p.path }}" title="Schedule a build"><i class="bi bi-play-circle-fill text-success"></i></a>
+        <a class="btn btn-sm btn-link p-0 fs-5" href="#" data-queue="test" data-project="{{ p.path }}" title="Schedule tests"><i class="bi bi-clipboard-check"></i></a>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="text-body-secondary">No idl projects (no idlproj.yml) under {{ base.root }}.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<div class="small text-body-secondary mt-2">
+  Legend: {{ ci.ball("passed") }} passed {{ ci.ball("failed") }} failed {{ ci.ball("cancelled") }} aborted / not built {{ ci.ball("running") }} running
+</div>
+
+<div class="modal fade" id="new-job" tabindex="-1">
+  <div class="modal-dialog"><form class="modal-content" data-queue-form>
+    <div class="modal-header"><h5 class="modal-title">New Job</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="mb-3"><label class="form-label">Project</label>
+        <select class="form-select" name="project">{% for p in page.projects %}<option>{{ p.path }}</option>{% endfor %}</select></div>
+      <div class="mb-3"><label class="form-label">Command</label>
+        <select class="form-select" name="command">{% for c in base.commands %}<option>{{ c }}</option>{% endfor %}</select></div>
+      <div class="mb-3"><label class="form-label">Targets</label>
+        <input class="form-control" name="targets" placeholder="all targets (space separated names)"></div>
+      <div class="mb-3"><label class="form-label">Configuration</label>
+        <select class="form-select" name="configuration"><option value="none">idl default</option><option>debug</option><option>release</option></select></div>
+      <div class="form-check"><input class="form-check-input" type="checkbox" name="strict" id="nj-strict"><label class="form-check-label" for="nj-strict">--strict</label></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-primary">Build</button></div>
+  </form></div>
+</div>
+{% endblock %}

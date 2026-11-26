@@ -56,8 +56,22 @@ const embeds = [_]Embed{
     .{ .path = "haxy.wasm", .content_type = "application/wasm", .body = @embedFile("haxy.wasm") },
 };
 
+// a feature serving its own urls under `prefix` in local mode (cpull's CI
+// under /ci): `handle` gets every request whose path is `prefix` or below it,
+// with the whole target (path and query)
+pub const Mount = struct {
+    prefix: []const u8,
+    ctx: *anyopaque,
+    handle: *const fn (ctx: *anyopaque, io: std.Io, request: *std.http.Server.Request, allocator: std.mem.Allocator, target: []const u8) anyerror!void,
+
+    fn matches(self: Mount, path: []const u8) bool {
+        return std.mem.startsWith(u8, path, self.prefix) and (path.len == self.prefix.len or path[self.prefix.len] == '/');
+    }
+};
+
 // local mode's repos: a single repo, or every repo of a pull workspace
 pub const LocalHost = struct {
+    mounts: []const Mount = &.{},
     // the repo plain local mode views
     source: ?ui.RepoSource = null,
     // the workspace workspace mode views, whose repo urls carry their identity
@@ -202,6 +216,12 @@ fn handleRequest(
     defer if (owned_target) |target| allocator.free(target);
     const uri = try std.Uri.parseAfterScheme("", owned_target orelse request.head.target);
     const path = uri.path.percent_encoded;
+
+    switch (host) {
+        .local => |local| for (local.mounts) |mount| if (mount.matches(path))
+            return mount.handle(mount.ctx, io, request, allocator, owned_target orelse request.head.target),
+        .server => {},
+    }
 
     // POST routes can be scoped by any page, so they can redirect using
     // the base of the URL. this allows logging in to keep you on the page
