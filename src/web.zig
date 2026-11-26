@@ -2601,14 +2601,16 @@ fn handleWorkspaceMerge(
     local: LocalHost,
 ) !void {
     const workspace = local.workspace orelse return respondRepoNotFound(request);
-    // the body carries nothing, but it must be read before responding
+    // the body only carries `force` (merge past the CI gate), but it must be read before responding
     const body = try readFormBody(request, allocator);
-    allocator.free(body);
+    defer allocator.free(body);
+    const force_value = try parseFormField(allocator, body, "force");
+    defer if (force_value) |v| allocator.free(v);
     const route = ui.RoutablePage.fromUrlWorkspace(base) orelse return respondRepoNotFound(request);
     if (route != .workspace or route.workspace.view != .stack) return respondRepoNotFound(request);
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
-    const message = workspace.merge(workspace.ctx, &arena, route.workspace.selected.slice()) catch |err| @errorName(err);
+    const message = workspace.merge(workspace.ctx, &arena, route.workspace.selected.slice(), force_value != null) catch |err| @errorName(err);
     var encoded: std.Io.Writer.Allocating = .init(arena.allocator());
     try std.Uri.Component.percentEncode(&encoded.writer, message, struct {
         fn isUnreserved(c: u8) bool {

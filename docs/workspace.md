@@ -73,6 +73,10 @@ URLs
 
 * Each repo's own pages are at `/<workspace>:<repo>/...`, the same as on a server, where `<workspace>` is the root dir's name. cpull repo names can't hold `/`, so a nested `group/app` is `group.app`, here and when the repo is pushed to a cpull server. A root events repo is `workspace`.
 
+CI
+
+* The workspace server runs the CI of the workspace's idl projects at `/ci` (see [ci.md](ci.md)), and ties it to the forge: CI balls on the repo, commit, patch and stack pages, CI runs for patches and stacks, an optional merge gate (`cpull.require_ci`), issues for failing CI and `fixes #id` commits closing issues. See [integrate.md](integrate.md).
+
 Reports
 
 * Reports are issues pinned to a line of code, filed with `pull cpull report REPO FILE LINE` (what radar was). See [report.md](report.md).

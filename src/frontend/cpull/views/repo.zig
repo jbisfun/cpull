@@ -9,6 +9,8 @@ const ctx = @import("../ctx.zig");
 const markdown = @import("../markdown.zig");
 const report_views = @import("report.zig");
 const threads = @import("threads.zig");
+// CI status per repo and commit, issue links in commit messages (src/integrate)
+const ci_view = @import("../../../integrate/view.zig");
 const Ctx = ctx.Ctx;
 const Repo = ui.Repo;
 const RoutablePage = ui.RoutablePage;
@@ -150,6 +152,9 @@ pub fn chrome(c: Ctx, data: *const Repo, title: []const u8, extra: []const theme
             .more_href = if (column.next != null) try tabHref(c, data, .refs) else "",
         });
     }
+
+    // the CI of the repo's idl projects, in a workspace
+    if (ci_view.repoGroup(c.arena, id)) |group| try groups.insert(aa, 0, group);
 
     var crumbs: std.ArrayList(theme.Link) = .empty;
     const name = if (data.header.owner_name.len > 0 and c.workspace() == null) try c.print("{s}:{s}", .{ data.header.owner_name, data.header.name }) else data.header.name;
@@ -384,6 +389,8 @@ const CommitRow = struct {
     stats: []const u8,
     diff_href: []const u8,
     files_href: []const u8,
+    ci: ?ci_view.Summary = null,
+    summary_html: ?theme.vin.Str = null,
 };
 
 fn commitStats(c: Ctx, stats_maybe: anytype) ![]const u8 {
@@ -409,7 +416,10 @@ fn commits(c: Ctx, w: *std.Io.Writer, data: *const Repo, cm: *const Repo.Commits
     const aa = c.aa();
     const location = cm.handle.location;
     var rows: std.ArrayList(CommitRow) = .empty;
+    const ci_index = if (location == .repo) ci_view.commitIndex(c.arena, location.repo) else null;
     for (cm.commits) |*commit_item| try rows.append(aa, .{
+        .ci = if (ci_index) |x| x.get(commit_item.oid) else null,
+        .summary_html = if (location == .repo) ci_view.linkHtmlIfAny(c.arena, location.repo, ctx.summary(commit_item.message)) else null,
         .oid = ctx.short(commit_item.oid),
         .summary = ctx.summary(commit_item.message),
         .href = try c.routeUrl(location.commitMessageRoute(.object, commit_item.oid, cm.base_oid)),
@@ -427,6 +437,7 @@ fn commits(c: Ctx, w: *std.Io.Writer, data: *const Repo, cm: *const Repo.Commits
     };
     const next = if (cm.next_start) |oid| try c.routeUrl(pageRoute(cm, oid)) else "";
     try fe.emit(c, w, try chrome(c, data, "Commits", &.{}), "commits.html", .{
+        .has_ci = ci_index != null,
         .no_commits = cm.no_commits,
         .ref_kind = ref_kind,
         .ref_name = ref_name,
@@ -456,7 +467,10 @@ fn pageRoute(cm: *const Repo.Commits, oid: []const u8) ?RoutablePage {
 fn commit(c: Ctx, w: *std.Io.Writer, data: *const Repo, cm: *const Repo.Commits, item: *const Repo.Commits.Commit) !void {
     const location = cm.handle.location;
     const root = std.mem.allEqual(u8, item.parent_oid, '0');
+    const ci_index = if (location == .repo) ci_view.commitIndex(c.arena, location.repo) else null;
     try fe.emit(c, w, try chrome(c, data, ctx.summary(item.message), &.{.{ .label = ctx.short(item.oid) }}), "commit.html", .{
+        .ci = if (ci_index) |x| x.get(item.oid) else null,
+        .message_html = if (location == .repo) ci_view.linkHtml(c.arena, location.repo, item.message) else null,
         .summary = ctx.summary(item.message),
         .message = item.message,
         .truncated = item.message_truncated,

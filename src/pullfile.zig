@@ -20,6 +20,12 @@ pub const Pullfile = struct {
     // the pullfile `cpull` section's `events`: the repo whose cpull/events holds
     // the workspace's own issues and stacks, when the root isn't a git repo
     events_repo: ?[]const u8 = null,
+    // the `cpull` section's CI x forge switches (src/integrate): refuse to merge
+    // a stack whose latest CI isn't green (unless forced), file an issue when a
+    // default-branch CI job fails, close issues a landed commit `fixes #id`
+    require_ci: bool = false,
+    ci_issues: bool = true,
+    close_issues: bool = true,
 };
 
 pub const Error = error{ MalformedXml, InvalidPlist } || std.mem.Allocator.Error;
@@ -27,6 +33,7 @@ pub const Error = error{ MalformedXml, InvalidPlist } || std.mem.Allocator.Error
 // a plist value, reduced to what a pullfile uses
 const Value = union(enum) {
     string: []const u8,
+    boolean: bool,
     other,
     array: []const Value,
     dict: []const Entry,
@@ -42,6 +49,16 @@ const Value = union(enum) {
     fn str(self: ?Value) ?[]const u8 {
         const value = self orelse return null;
         return if (value == .string) value.string else null;
+    }
+
+    // <true/>/<false/>, or the strings "true"/"false"
+    fn flag(self: ?Value, default: bool) bool {
+        const value = self orelse return default;
+        return switch (value) {
+            .boolean => |b| b,
+            .string => |text| if (std.mem.eql(u8, text, "true")) true else if (std.mem.eql(u8, text, "false")) false else default,
+            else => default,
+        };
     }
 };
 
@@ -65,7 +82,13 @@ pub fn parse(arena: std.mem.Allocator, data: []const u8) Error!Pullfile {
     // `haxy`: the section's name before the fork was renamed to cpull
     const section = root.get("cpull") orelse root.get("haxy");
     const events_repo = if (section) |sec| Value.str(sec.get("events")) else null;
-    return .{ .repos = repos.items, .events_repo = events_repo };
+    var pf: Pullfile = .{ .repos = repos.items, .events_repo = events_repo };
+    if (section) |sec| {
+        pf.require_ci = Value.flag(sec.get("require_ci"), pf.require_ci);
+        pf.ci_issues = Value.flag(sec.get("ci_issues"), pf.ci_issues);
+        pf.close_issues = Value.flag(sec.get("close_issues"), pf.close_issues);
+    }
+    return pf;
 }
 
 fn parsePlist(arena: std.mem.Allocator, data: []const u8) Error!Value {
@@ -130,7 +153,10 @@ fn parseElement(arena: std.mem.Allocator, r: *xml.Reader) Error!Value {
         return .{ .array = items.items };
     }
     const is_string = std.mem.eql(u8, name, "string");
+    const is_true = std.mem.eql(u8, name, "true");
+    const is_false = std.mem.eql(u8, name, "false");
     const text = try readText(arena, r);
+    if (is_true or is_false) return .{ .boolean = is_true };
     return if (is_string) .{ .string = text } else .other;
 }
 
@@ -216,6 +242,7 @@ test "pullfile repos and cpull section" {
     try std.testing.expectEqualStrings("main", pf.repos[1].branch);
     try std.testing.expectEqual(null, pf.repos[1].commit);
     try std.testing.expectEqualStrings("dotenv", pf.events_repo.?);
+    try std.testing.expect(!pf.require_ci and pf.ci_issues and pf.close_issues);
     try std.testing.expectError(error.InvalidPlist, parse(arena.allocator(), "<plist><array/></plist>"));
 }
 
@@ -226,4 +253,16 @@ test "pullfile haxy section (before the rename) still names the events repo" {
         \\<plist version="1.0"><dict><key>haxy</key><dict><key>events</key><string>dotenv</string></dict><key>repos</key><array/></dict></plist>
     );
     try std.testing.expectEqualStrings("dotenv", pf.events_repo.?);
+}
+
+
+test "pullfile cpull section switches" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const pf = try parse(arena.allocator(),
+        \\<plist version="1.0"><dict><key>cpull</key><dict><key>events</key><string>dotenv</string><key>require_ci</key><true/><key>ci_issues</key><false/><key>close_issues</key><string>false</string></dict><key>repos</key><array/></dict></plist>
+    );
+    try std.testing.expect(pf.require_ci);
+    try std.testing.expect(!pf.ci_issues);
+    try std.testing.expect(!pf.close_issues);
 }

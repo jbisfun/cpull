@@ -150,12 +150,15 @@ pub const App = struct {
             app.workers = true;
         } else lock.close(io);
 
-        if (opts.listen) |addr| {
+        // the address `cpull ci` and the MCP tools reach: the server running the
+        // jobs keeps it, so a second one (a TUI on the same workspace) doesn't take it over
+        if (opts.listen) |addr| if (app.workers or !opts.start_workers) {
             const cpull_dir = try std.fs.path.join(a, &.{ root, ".pull", "cpull" });
             Io.Dir.cwd().createDirPath(io, cpull_dir) catch {};
             const addr_path = try std.fs.path.join(a, &.{ cpull_dir, "serve.addr" });
             Io.Dir.cwd().writeFile(io, .{ .sub_path = addr_path, .data = addr }) catch |e| log.warn("can't write {s}: {t}", .{ addr_path, e });
-        }
+        };
+
 
         if (app.workers) {
             try app.runner.recover();
@@ -263,6 +266,12 @@ pub const App = struct {
 
     /// Queue a job (`msg` explains a BadRequest/NotFound).
     pub fn enqueue(app: *App, a: Allocator, new_in: db.NewJob, msg: *[]const u8) !db.Enqueued {
+        return app.enqueueWith(a, new_in, null, msg);
+    }
+
+    /// Queue a job recording `git` as its git state rather than the project
+    /// dir's (patch and stack jobs, whose commits aren't checked out there).
+    pub fn enqueueWith(app: *App, a: Allocator, new_in: db.NewJob, git: ?db.GitInfo, msg: *[]const u8) !db.Enqueued {
         var new = new_in;
         const p = app.resolve(a, new.project, msg) catch |e| return if (e == error.NotFound) error.BadRequest else e;
         if (new.targets.len > 0) {
@@ -283,7 +292,7 @@ pub const App = struct {
             } else |_| {}
         }
         new.project = p.path;
-        const job, const created = try app.store.insert(a, new, app.gitInfo(a, p.dir));
+        const job, const created = try app.store.insert(a, new, git orelse app.gitInfo(a, p.dir));
         if (created) app.runner.kick();
         return .{ .job = job, .deduplicated = !created };
     }

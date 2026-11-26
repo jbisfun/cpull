@@ -10,6 +10,8 @@ const ctx = @import("../ctx.zig");
 const markdown = @import("../markdown.zig");
 const repo_views = @import("repo.zig");
 const report_views = @import("report.zig");
+// patch CI, issue references and `#id` links (src/integrate)
+const ci_view = @import("../../../integrate/view.zig");
 const Ctx = ctx.Ctx;
 const Repo = ui.Repo;
 const RoutablePage = ui.RoutablePage;
@@ -354,6 +356,8 @@ fn detail(c: Ctx, w: *std.Io.Writer, repo: *const Repo, comptime kind: evt.Event
     const anchor: ?report_views.AnchorView = if (kind == .issue) try report_views.anchorView(c, data.identity, event.anchor, data.excerpt) else null;
     const extra = try aa.dupe(theme.Link, &.{.{ .label = event.title }});
     try fe.emit(c, w, try repo_views.chrome(c, repo, event.title, extra), "thread.html", .{
+        .ci = if (kind == .patch) ci_view.patchCi(c.arena, data.identity, entry.id, event.source_branch, thread_url) else null,
+        .refs = if (kind == .issue) ci_view.issueRefs(c.arena, data.identity, entry.id) else null,
         .noun = n.noun,
         .kind = @tagName(kind),
         .title = event.title,
@@ -364,7 +368,7 @@ fn detail(c: Ctx, w: *std.Io.Writer, repo: *const Repo, comptime kind: evt.Event
         .back_href = try listUrl(c, kind, data.identity, status, data.search orelse ""),
         .back_label = try c.print("{s} {s}", .{ statusLabel(status), n.plural }),
         .thread_href = thread_url,
-        .description = try markdown.render(aa, shown_description),
+        .description = try markdown.render(aa, ci_view.linkMarkdown(c.arena, data.identity, shown_description)),
         .has_description = description.len > 0,
         .more_href = if (preview_end != null) try c.routeUrl(RoutablePage.repoThreadDescriptionRoute(kind, data.identity, entry.id)) else "",
         .labels = try labelChips(c, kind, data, status, event.labels),

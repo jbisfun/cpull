@@ -1,6 +1,7 @@
 {% extends "theme/layout.html" %}
 {% import "theme/macros.html" as ui %}
 {% import "macros.html" as hx %}
+{% import "integrate.html" as ig %}
 {% block tasks_before %}{{ ui.back("/home/stacks", "Back to Stacks") }}{% endblock %}
 {% block content %}
 {{ ui.heading(page.title, page.ball) }}
@@ -14,7 +15,7 @@
 <h2 class="h5 mt-4">Members</h2>
 <div class="table-responsive">
 <table class="table table-sm table-hover align-middle">
-  <thead><tr><th class="text-center">S</th><th>Repo</th><th>Patch</th><th>Branches</th><th>Status</th><th>Merge</th><th>Target</th></tr></thead>
+  <thead><tr><th class="text-center">S</th><th>Repo</th><th>Patch</th><th>Branches</th><th>Status</th><th>Merge</th><th>Target</th>{% if page.ci %}<th class="text-center" title="The patch's own CI">CI</th>{% endif %}</tr></thead>
   <tbody>
   {% for m in page.members %}
     <tr>
@@ -25,13 +26,21 @@
       <td>{{ m.status }}</td>
       <td>{{ m.mergeable|replace("_", " ") }}</td>
       <td>{% if m.target_oid %}<code>{{ m.target_oid }}</code>{% if m.pin_differs %} <span class="small text-body-secondary">(pinned <code>{{ m.pin }}</code>)</span>{% endif %}{% endif %}</td>
+      {% if page.ci %}<td class="text-center">{% if m.ci %}{{ ig.ci_ball(m.ci) }}{% endif %}</td>{% endif %}
     </tr>
   {% endfor %}
   </tbody>
 </table>
 </div>
+{% if page.ci %}{{ ig.stack_ci(page.ci) }}{% endif %}
 {% if page.open %}
-{% if page.mergeable %}
+{% if page.mergeable and page.gate_blocks %}
+<form method="post" action="{{ page.merge_action }}" class="d-flex flex-wrap align-items-center gap-3">
+  <input type="hidden" name="force" value="1">
+  <button type="submit" class="btn btn-outline-danger"><i class="bi bi-sign-merge-right"></i> Merge without green CI</button>
+  <span class="small text-body-secondary">Every member merges cleanly, but the pullfile requires green CI first. This merges anyway (like <code>--force</code>).</span>
+</form>
+{% elif page.mergeable %}
 <form method="post" action="{{ page.merge_action }}" class="d-flex align-items-center gap-3">
   <button type="submit" class="btn btn-primary"><i class="bi bi-sign-merge-right"></i> Merge stack</button>
   <span class="small text-body-secondary">Every member merges cleanly. Merging moves each target branch, marks the patches merged, and pins the new commits with pull.</span>

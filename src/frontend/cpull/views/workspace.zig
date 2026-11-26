@@ -7,6 +7,8 @@ const theme = @import("../../theme/theme.zig");
 const fe = @import("../frontend.zig");
 const ctx = @import("../ctx.zig");
 const markdown = @import("../markdown.zig");
+// CI status and the stack merge gate (src/integrate)
+const ci_view = @import("../../../integrate/view.zig");
 const Ctx = ctx.Ctx;
 const Workspace = ui.Workspace;
 
@@ -31,6 +33,7 @@ const RepoRow = struct {
     patches_href: []const u8,
     files_href: []const u8,
     commits_href: []const u8,
+    ci: ?ci_view.Summary = null,
 };
 
 const ListRow = struct {
@@ -44,6 +47,7 @@ const ListRow = struct {
     status: []const u8 = "",
     ball: []const u8 = "open",
     first_of_repo: bool = false,
+    ci: ?ci_view.Summary = null,
 };
 
 const StackRow = struct {
@@ -53,6 +57,7 @@ const StackRow = struct {
     ball: []const u8,
     members: usize,
     conflicted: []const u8,
+    ci: ?ci_view.Summary = null,
 };
 
 pub fn page(c: Ctx, w: *std.Io.Writer, data: *const Workspace) !void {
@@ -142,6 +147,7 @@ pub fn page(c: Ctx, w: *std.Io.Writer, data: *const Workspace) !void {
                 .status = patch.status,
                 .ball = patch.status,
                 .first_of_repo = previous == null or !std.mem.eql(u8, previous.?, patch.repo),
+                .ci = ci_view.patchBall(c.arena, patch.repo, patch.id),
             });
             previous = patch.repo;
         },
@@ -155,9 +161,11 @@ pub fn page(c: Ctx, w: *std.Io.Writer, data: *const Workspace) !void {
         .ball = if (s.conflicted_fields.len > 0) "conflict" else s.status,
         .members = s.members,
         .conflicted = s.conflicted_fields,
+        .ci = ci_view.stackBall(c.arena, s.id),
     });
 
     try fe.emit(c, w, chrome, "workspace.html", .{
+        .has_ci = ci_view.enabled(),
         .view = view_name,
         .name = data.name,
         .events_identity = data.events_identity,
@@ -204,6 +212,7 @@ fn repoRow(c: Ctx, repo: Workspace.RepoRow) !RepoRow {
         .patches_href = try c.print("/{s}/patches", .{repo.identity}),
         .files_href = try c.print("/{s}", .{repo.identity}),
         .commits_href = try c.print("/{s}/commits", .{repo.identity}),
+        .ci = ci_view.repoStatus(c.arena, repo.name),
     };
 }
 
@@ -221,6 +230,7 @@ const Member = struct {
     target_oid: []const u8,
     pin: []const u8,
     pin_differs: bool,
+    ci: ?ci_view.Summary = null,
 };
 
 fn stack(c: Ctx, w: *std.Io.Writer, chrome: fe.Chrome, data: *const Workspace) !void {
@@ -247,22 +257,28 @@ fn stack(c: Ctx, w: *std.Io.Writer, chrome: fe.Chrome, data: *const Workspace) !
             .target_oid = ctx.short(target),
             .pin = if (m.pin) |p| ctx.short(p) else "",
             .pin_differs = if (m.pin) |p| m.target_oid != null and !std.mem.eql(u8, p, target) else false,
+            .ci = ci_view.patchBall(c.arena, m.repo, m.patch_id),
         });
     }
     const open = std.mem.eql(u8, s.status, "open");
+    const stack_url = try Workspace.stackUrl(aa, s.id);
+    const ci = ci_view.stackCi(c.arena, s.id, stack_url);
     try fe.emit(c, w, chrome, "stack.html", .{
+        .ci = ci,
+        // the merge gate refuses: the form offers merging anyway
+        .gate_blocks = if (ci) |x| x.required and !x.gate_ok else false,
         .title = s.title,
         .status = s.status,
         .ball = if (s.conflicted_fields.len > 0) "conflict" else s.status,
         .labels = try ctx.labels(c, s.labels),
         .author = s.author_email orelse "",
         .conflicted = s.conflicted_fields,
-        .description = try markdown.render(aa, s.description),
+        .description = try markdown.render(aa, ci_view.linkStackMarkdown(c.arena, s.description)),
         .has_description = s.description.len > 0,
         .members = members.items,
         .open = open,
         .mergeable = s.mergeable,
-        .merge_action = try c.print("{s}/merge", .{try Workspace.stackUrl(aa, s.id)}),
+        .merge_action = try c.print("{s}/merge", .{stack_url}),
     });
 }
 

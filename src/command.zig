@@ -37,7 +37,9 @@ fn commandHelp(command_kind: CommandKind) Help {
             \\new opens one patch per member (REPO:SOURCE[:TARGET], the target
             \\defaulting to the pullfile branch) and the stack naming them, in the
             \\workspace's events repo. merge merges every member or none, marks
-            \\them merged and prints the commits to pin. show and list print json.
+            \\them merged and prints the commits to pin; with the pullfile's
+            \\cpull.require_ci it refuses until the stack's CI is green, unless
+            \\--force. show and list print json.
             ,
             .example =
             \\cpull stack new --title "rename the api" core:feature app/web:feature
@@ -280,6 +282,8 @@ pub const StackOptions = struct {
     title: []const u8 = "",
     description: []const u8 = "",
     labels: []const u8 = "",
+    // merge: past the pullfile's CI gate (`cpull.require_ci`)
+    force: bool = false,
 };
 
 pub const ReportOptions = @import("report/report.zig").Options;
@@ -331,6 +335,7 @@ pub const Command = union(CommandKind) {
                 if (cmd_args.get("--title")) |value_maybe| options.title = value_maybe orelse return error.TitleNeedsValue;
                 if (cmd_args.get("--description")) |value_maybe| options.description = value_maybe orelse return error.DescriptionNeedsValue;
                 if (cmd_args.get("--labels")) |value_maybe| options.labels = value_maybe orelse return error.LabelsNeedsValue;
+                options.force = cmd_args.contains("--force");
                 return .{ .stack = options };
             },
             .report => {

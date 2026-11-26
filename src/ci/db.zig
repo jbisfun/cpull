@@ -107,6 +107,11 @@ pub const Job = struct {
     requested_by: RequestedBy,
     retry_of: ?i64,
     log: []const u8,
+    /// What the job checks besides the workspace checkout: "patch:<repo>:<id>"
+    /// or "stack:<id>" (src/integrate/patchci.zig); null for the workspace itself.
+    subject: ?[]const u8 = null,
+    /// For a subject: the commits checked out, one "<pullfile repo> <oid>" per line.
+    checkout: ?[]const u8 = null,
 
     pub fn jsonStringify(j: Job, w: anytype) !void {
         try w.beginObject();
@@ -123,7 +128,7 @@ pub const Job = struct {
             try w.objectField(f);
             try w.write(@field(j.git, f));
         }
-        inline for (.{ "requested_by", "retry_of", "log" }) |f| {
+        inline for (.{ "requested_by", "retry_of", "log", "subject", "checkout" }) |f| {
             try w.objectField(f);
             try w.write(@field(j, f));
         }
@@ -152,6 +157,7 @@ pub const Job = struct {
             try w.print("{s}{s}", .{ head, if (j.git.dirty) "+dirty" else "" });
         }
         try w.print(" by {t}", .{j.requested_by});
+        if (j.subject) |subj| try w.print(" for {s}", .{subj});
         return out.written();
     }
 };
@@ -179,6 +185,9 @@ pub const NewJob = struct {
     strict: bool = false,
     requested_by: RequestedBy = .cli,
     retry_of: ?i64 = null,
+    /// See Job.subject/checkout; queued by src/integrate/patchci.zig only.
+    subject: ?[]const u8 = null,
+    checkout: ?[]const u8 = null,
 
     /// Parse idlci's NewJob JSON (missing fields take their defaults).
     pub fn fromJson(a: Allocator, body: []const u8) !NewJob {
@@ -249,7 +258,7 @@ pub fn now(io: Io) i64 {
 }
 
 const cols = "id, project, command, targets, configuration, strict, status, exit_code, created, " ++
-    "started, finished, repo, branch, head, dirty, requested_by, retry_of, log";
+    "started, finished, repo, branch, head, dirty, requested_by, retry_of, log, subject, checkout";
 
 /// A jobs row as SQLite returns it; `toJob` parses its enum and JSON columns.
 const Row = struct {
@@ -271,6 +280,8 @@ const Row = struct {
     requested_by: []const u8,
     retry_of: ?i64,
     log: []const u8,
+    subject: ?[]const u8,
+    checkout: ?[]const u8,
 
     fn toJob(r: Row, a: Allocator) !Job {
         const targets = std.json.parseFromSliceLeaky([]const []const u8, a, r.targets, .{}) catch &.{};
@@ -290,6 +301,8 @@ const Row = struct {
             .requested_by = RequestedBy.parse(r.requested_by) orelse return error.InvalidColumn,
             .retry_of = r.retry_of,
             .log = r.log,
+            .subject = r.subject,
+            .checkout = r.checkout,
         };
     }
 };
@@ -339,6 +352,16 @@ pub const Store = struct {
         , .{}, .{});
         try db.exec("CREATE INDEX IF NOT EXISTS jobs_project ON jobs(project, command)", .{}, .{});
         try db.exec("CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status)", .{}, .{});
+        // cpull's additions to idlci's schema (patch/stack CI, CI issues, commit links)
+        inline for (.{ "subject", "checkout" }) |col| {
+            const has = try db.one(struct { n: i64 }, "SELECT COUNT(*) FROM pragma_table_info('jobs') WHERE name = ?", .{}, .{@as([]const u8, col)});
+            if (has == null or has.?.n == 0) try db.exec("ALTER TABLE jobs ADD COLUMN " ++ col ++ " TEXT", .{}, .{});
+        }
+        try db.exec("CREATE INDEX IF NOT EXISTS jobs_subject ON jobs(subject)", .{}, .{});
+        try db.exec("CREATE INDEX IF NOT EXISTS jobs_head ON jobs(repo, head)", .{}, .{});
+        try db.exec("CREATE TABLE IF NOT EXISTS ci_issues (key TEXT PRIMARY KEY, repo TEXT NOT NULL, issue TEXT NOT NULL)", .{}, .{});
+        try db.exec("CREATE TABLE IF NOT EXISTS issue_jobs (repo TEXT NOT NULL, issue TEXT NOT NULL, job INTEGER NOT NULL, PRIMARY KEY (repo, issue, job))", .{}, .{});
+        try db.exec("CREATE TABLE IF NOT EXISTS link_tips (repo TEXT PRIMARY KEY, oid TEXT NOT NULL)", .{}, .{});
         const s = try gpa.create(Store);
         s.* = .{ .db = db, .io = io, .dir = try gpa.dupe(u8, dir) };
         return s;
@@ -378,17 +401,17 @@ pub const Store = struct {
         defer s.unlock();
         const targets = try std.json.Stringify.valueAlloc(a, new.targets, .{});
         if (try s.queryOne(a, "SELECT " ++ cols ++ " FROM jobs WHERE status = 'queued' AND project = ? AND command = ? " ++
-            "AND targets = ? AND configuration = ? AND strict = ? ORDER BY id LIMIT 1", .{
-            new.project, new.command.name(), targets, @as([]const u8, @tagName(new.configuration)), new.strict,
+            "AND targets = ? AND configuration = ? AND strict = ? AND subject IS ? AND checkout IS ? ORDER BY id LIMIT 1", .{
+            new.project, new.command.name(), targets, @as([]const u8, @tagName(new.configuration)), new.strict, new.subject, new.checkout,
         })) |job| return .{ job, false };
         try s.db.exec(
             "INSERT INTO jobs (project, command, targets, configuration, strict, status, created, " ++
-                "repo, branch, head, dirty, requested_by, retry_of) VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?)",
+                "repo, branch, head, dirty, requested_by, retry_of, subject, checkout) VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             .{},
             .{
                 new.project,         new.command.name(), targets,       @as([]const u8, @tagName(new.configuration)), new.strict, now(s.io),
                 git.repo,            git.branch,         git.head,      git.dirty,                                     @as([]const u8, @tagName(new.requested_by)),
-                new.retry_of,
+                new.retry_of,        new.subject,        new.checkout,
             },
         );
         const id = s.db.getLastInsertRowID();
@@ -471,14 +494,14 @@ pub const Store = struct {
         s.lock();
         defer s.unlock();
         return s.queryAll(a, "SELECT " ++ cols ++ " FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY project ORDER BY id DESC) AS n " ++
-            "FROM jobs WHERE status IN ('passed', 'failed', 'cancelled')) WHERE n <= ? ORDER BY id DESC", .{@as(i64, @intCast(per_project))});
+            "FROM jobs WHERE status IN ('passed', 'failed', 'cancelled') AND subject IS NULL) WHERE n <= ? ORDER BY id DESC", .{@as(i64, @intCast(per_project))});
     }
 
     /// The latest job per (project, command).
     pub fn latestPerCommand(s: *Store, a: Allocator) ![]Job {
         s.lock();
         defer s.unlock();
-        return s.queryAll(a, "SELECT " ++ cols ++ " FROM jobs WHERE id IN (SELECT MAX(id) FROM jobs GROUP BY project, command)", .{});
+        return s.queryAll(a, "SELECT " ++ cols ++ " FROM jobs WHERE id IN (SELECT MAX(id) FROM jobs WHERE subject IS NULL GROUP BY project, command)", .{});
     }
 
     /// How long the last passed run of the same project + command took (progress estimate).
@@ -486,8 +509,99 @@ pub const Store = struct {
         s.lock();
         defer s.unlock();
         const row = try s.db.one(struct { d: ?i64 }, "SELECT finished - started FROM jobs WHERE project = ? AND command = ? " ++
-            "AND status = 'passed' ORDER BY id DESC LIMIT 1", .{}, .{ project, command.name() }) orelse return null;
+            "AND status = 'passed' AND subject IS NULL ORDER BY id DESC LIMIT 1", .{}, .{ project, command.name() }) orelse return null;
         return row.d;
+    }
+
+    // ---- cpull's integration queries (src/integrate) ----------------------
+
+    /// The workspace's latest job per (project, command) whose repo is `repo`.
+    pub fn latestForRepo(s: *Store, a: Allocator, repo: []const u8) ![]Job {
+        s.lock();
+        defer s.unlock();
+        return s.queryAll(a, "SELECT " ++ cols ++ " FROM jobs WHERE id IN (SELECT MAX(id) FROM jobs WHERE subject IS NULL " ++
+            "AND repo = ? GROUP BY project, command) ORDER BY project, command", .{repo});
+    }
+
+    /// The latest job per (project, command) checking `subject`.
+    pub fn latestForSubject(s: *Store, a: Allocator, subject: []const u8) ![]Job {
+        s.lock();
+        defer s.unlock();
+        return s.queryAll(a, "SELECT " ++ cols ++ " FROM jobs WHERE id IN (SELECT MAX(id) FROM jobs WHERE subject = ? " ++
+            "GROUP BY project, command) ORDER BY project, command", .{subject});
+    }
+
+    /// The newest jobs that ran on some commit of `repo` (any subject), newest first.
+    pub fn withHeads(s: *Store, a: Allocator, repo: []const u8, limit: usize) ![]Job {
+        s.lock();
+        defer s.unlock();
+        return s.queryAll(a, "SELECT " ++ cols ++ " FROM jobs WHERE repo = ? AND head IS NOT NULL ORDER BY id DESC LIMIT ?", .{ repo, @as(i64, @intCast(limit)) });
+    }
+
+    /// The newest job before `before` with the same project, command, targets,
+    /// configuration and subject as `j` that passed or failed.
+    pub fn previousOutcome(s: *Store, a: Allocator, j: Job) !?Job {
+        s.lock();
+        defer s.unlock();
+        const targets = try std.json.Stringify.valueAlloc(a, j.targets, .{});
+        return s.queryOne(a, "SELECT " ++ cols ++ " FROM jobs WHERE id < ? AND project = ? AND command = ? AND targets = ? " ++
+            "AND configuration = ? AND subject IS ? AND status IN ('passed', 'failed') ORDER BY id DESC LIMIT 1", .{
+            j.id, j.project, j.command.name(), targets, @as([]const u8, @tagName(j.configuration)), j.subject,
+        });
+    }
+
+    /// The issue a CI failure key is tracked by (src/integrate/ciissue.zig).
+    pub fn ciIssue(s: *Store, a: Allocator, key: []const u8) !?struct { repo: []const u8, issue: []const u8 } {
+        s.lock();
+        defer s.unlock();
+        const row = try s.db.oneAlloc(struct { repo: []const u8, issue: []const u8 }, a, "SELECT repo, issue FROM ci_issues WHERE key = ?", .{}, .{key}) orelse return null;
+        return .{ .repo = row.repo, .issue = row.issue };
+    }
+
+    pub fn setCiIssue(s: *Store, key: []const u8, repo: []const u8, issue: []const u8) !void {
+        s.lock();
+        defer s.unlock();
+        try s.db.exec("INSERT INTO ci_issues (key, repo, issue) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET repo = excluded.repo, issue = excluded.issue", .{}, .{ key, repo, issue });
+    }
+
+    /// Remember that job `job` concerns issue `issue` of `repo` (its CI issue).
+    pub fn linkIssueJob(s: *Store, repo: []const u8, issue: []const u8, job: i64) !void {
+        s.lock();
+        defer s.unlock();
+        try s.db.exec("INSERT OR IGNORE INTO issue_jobs (repo, issue, job) VALUES (?, ?, ?)", .{}, .{ repo, issue, job });
+    }
+
+    /// The jobs linked to an issue, newest first.
+    pub fn issueJobs(s: *Store, a: Allocator, repo: []const u8, issue: []const u8) ![]Job {
+        s.lock();
+        defer s.unlock();
+        return s.queryAll(a, "SELECT " ++ cols ++ " FROM jobs WHERE id IN (SELECT job FROM issue_jobs WHERE repo = ? AND issue = ?) ORDER BY id DESC LIMIT 50", .{ repo, issue });
+    }
+
+    /// The default-branch tip the commit-link scanner last saw in `repo`.
+    pub fn linkTip(s: *Store, a: Allocator, repo: []const u8) !?[]const u8 {
+        s.lock();
+        defer s.unlock();
+        const row = try s.db.oneAlloc(struct { oid: []const u8 }, a, "SELECT oid FROM link_tips WHERE repo = ?", .{}, .{repo}) orelse return null;
+        return row.oid;
+    }
+
+    pub fn setLinkTip(s: *Store, repo: []const u8, oid: []const u8) !void {
+        s.lock();
+        defer s.unlock();
+        try s.db.exec("INSERT INTO link_tips (repo, oid) VALUES (?, ?) ON CONFLICT(repo) DO UPDATE SET oid = excluded.oid", .{}, .{ repo, oid });
+    }
+
+    /// The running jobs' process groups, for shutdown.
+    pub fn runningPids(s: *Store, a: Allocator) ![]i32 {
+        s.lock();
+        defer s.unlock();
+        var stmt = try s.db.prepare("SELECT pid FROM jobs WHERE status = 'running' AND pid IS NOT NULL");
+        defer stmt.deinit();
+        var it = try stmt.iterator(struct { pid: i32 }, .{});
+        var out: std.ArrayList(i32) = .empty;
+        while (try it.next(.{})) |r| try out.append(a, r.pid);
+        return out.items;
     }
 };
 

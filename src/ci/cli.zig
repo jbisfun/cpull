@@ -21,6 +21,9 @@ pub const usage =
     \\  log   ID [-f|--follow]
     \\  cancel ID
     \\  retry ID
+    \\  patch REPO PATCH [-w]   build + test a cpull patch's source branch in a work tree
+    \\  stack STACK [-w]        the same for every member of a stack, checked out together
+    \\        (PATCH/STACK: an id or a unique prefix; --wait exits nonzero unless all pass)
     \\
     \\--root defaults to $PULL_ROOT, else the nearest parent holding pullfile.plist;
     \\--addr to $CPULL_ADDR, else .pull/cpull/serve.addr, else 127.0.0.1:8080.
@@ -128,6 +131,8 @@ pub fn parseJob(a: Allocator, v: std.json.Value) !db.Job {
         .requested_by = db.RequestedBy.parse(str.s(o, "requested_by") orelse "") orelse .cli,
         .retry_of = str.i(o, "retry_of"),
         .log = str.s(o, "log") orelse "",
+        .subject = str.s(o, "subject"),
+        .checkout = str.s(o, "checkout"),
     };
 }
 
@@ -215,7 +220,7 @@ pub fn run(io: Io, a: Allocator, args: []const []const u8, env: *const std.proce
         return 2;
     }
     const cmd = pos[0];
-    const known = [_][]const u8{ "queue", "jobs", "list", "log", "cancel", "retry" };
+    const known = [_][]const u8{ "queue", "jobs", "list", "log", "cancel", "retry", "patch", "stack" };
     if (for (known) |k| (if (std.mem.eql(u8, k, cmd)) break false) else true) {
         try err.print("error: unrecognized subcommand '{s}'\n\n{s}", .{ cmd, usage });
         return 2;
@@ -308,6 +313,42 @@ fn command(io: Io, a: Allocator, c: *Client, cmd: []const u8, pos: []const []con
         const v = try c.get(try std.fmt.allocPrint(a, "/ci/api/jobs/{d}/log?tail=1000000", .{id}));
         try out.print("{s}\n", .{v.object.get("text").?.string});
         return 0;
+    }
+    if (std.mem.eql(u8, cmd, "patch") or std.mem.eql(u8, cmd, "stack")) {
+        const stack = std.mem.eql(u8, cmd, "stack");
+        if (pos.len != @as(usize, if (stack) 1 else 2)) {
+            try err.print("error: {s} needs {s}\n\n{s}", .{ cmd, if (stack) "STACK" else "REPO and PATCH", usage });
+            return 2;
+        }
+        const body = if (stack)
+            try std.json.Stringify.valueAlloc(a, .{ .id = pos[0], .requested_by = "cli" }, .{})
+        else
+            try std.json.Stringify.valueAlloc(a, .{ .repo = pos[0], .id = pos[1], .requested_by = "cli" }, .{});
+        const v = try c.post(if (stack) "/ci/api/stack" else "/ci/api/patch", body);
+        try out.print("{s}\n", .{v.object.get("subject").?.string});
+        var ids: std.ArrayList(i64) = .empty;
+        for (v.object.get("jobs").?.array.items) |j| {
+            const job = try parseJob(a, j);
+            const dedup = j.object.get("deduplicated");
+            try out.print("{s}{s}\n", .{ try job.summary(a), if (dedup != null and dedup.? == .bool and dedup.?.bool) " (already queued)" else "" });
+            try ids.append(a, job.id);
+        }
+        try out.flush();
+        if (!p.wait) return 0;
+        var failed = false;
+        for (ids.items) |id| {
+            while (true) {
+                const job = try parseJob(a, try c.get(try std.fmt.allocPrint(a, "/ci/api/jobs/{d}", .{id})));
+                if (job.status.isFinal()) {
+                    try out.print("{s}\n", .{try job.summary(a)});
+                    try out.flush();
+                    if (job.status != .passed) failed = true;
+                    break;
+                }
+                io.sleep(.fromSeconds(1), .awake) catch {};
+            }
+        }
+        return if (failed) 1 else 0;
     }
     if (std.mem.eql(u8, cmd, "cancel")) {
         const id = try needId(pos, err) orelse return 2;

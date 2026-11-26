@@ -8,6 +8,8 @@ const projects = @import("projects.zig");
 const app_mod = @import("app.zig");
 const theme = @import("../frontend/theme/theme.zig");
 const frontend = @import("../frontend/cpull/frontend.zig");
+// patch/stack CI routes (src/integrate)
+const integrate_web = @import("../integrate/ciweb.zig");
 
 const App = app_mod.App;
 const Allocator = std.mem.Allocator;
@@ -121,6 +123,10 @@ fn header(request: *Request, name: []const u8) ?[]const u8 {
 fn route(r: *Req, path_in: []const u8) !void {
     const path = std.mem.trimEnd(u8, path_in[prefix.len..], "/");
     const method = r.request.head.method;
+    if (integrate_web.handles(method, path)) {
+        if (method == .POST and !isSameOrigin(r.request)) return r.fail(.forbidden, "cross-origin request");
+        return integrate_web.handle(r.app, r.a, r.request, path);
+    }
     if (method == .POST) {
         if (!isSameOrigin(r.request)) return r.fail(.forbidden, "cross-origin request");
         if (std.mem.eql(u8, path, "/api/jobs")) return apiEnqueue(r);
@@ -223,6 +229,25 @@ fn apiCancel(r: *Req, id: i64) !void {
 fn apiRetry(r: *Req, id: i64) !void {
     const job = try jobOr404(r, id) orelse return;
     const by = if (r.param("by")) |b| db.RequestedBy.parse(b) orelse job.requested_by else job.requested_by;
+    // a patch or stack job retries on the same commits
+    if (job.subject != null) {
+        var msg: []const u8 = "";
+        const e = r.app.enqueueWith(r.a, .{
+            .project = job.project,
+            .command = job.command,
+            .targets = job.targets,
+            .configuration = job.configuration,
+            .strict = job.strict,
+            .requested_by = by,
+            .retry_of = id,
+            .subject = job.subject,
+            .checkout = job.checkout,
+        }, job.git, &msg) catch |err| switch (err) {
+            error.BadRequest, error.NotFound => return r.fail(.bad_request, msg),
+            else => return err,
+        };
+        return r.json(.ok, e);
+    }
     try enqueue(r, .{
         .project = job.project,
         .command = job.command,
@@ -398,6 +423,9 @@ const JobView = struct {
     requested_by: []const u8,
     retry_of: ?i64,
     active: bool,
+    // a patch or stack job's subject, and the commits it checked out
+    subject: []const u8,
+    checkout_lines: []const []const u8,
 
     fn of(a: Allocator, now: i64, j: db.Job) !JobView {
         return .{
@@ -423,6 +451,13 @@ const JobView = struct {
             .requested_by = @tagName(j.requested_by),
             .retry_of = j.retry_of,
             .active = !j.status.isFinal(),
+            .subject = j.subject orelse "",
+            .checkout_lines = blk: {
+                var lines: std.ArrayList([]const u8) = .empty;
+                var it = std.mem.tokenizeScalar(u8, j.checkout orelse "", '\n');
+                while (it.next()) |line| try lines.append(a, line);
+                break :blk lines.items;
+            },
         };
     }
 

@@ -35,6 +35,7 @@ const files = blk: {
 
 pub const templates = [_]theme.Template{
     .{ .name = "macros.html", .source = @embedFile("templates/macros.html") },
+    .{ .name = "integrate.html", .source = @embedFile("templates/integrate.html") },
     .{ .name = "report.html", .source = @embedFile("templates/report.html") },
     .{ .name = "workspace.html", .source = @embedFile("templates/workspace.html") },
     .{ .name = "stack.html", .source = @embedFile("templates/stack.html") },

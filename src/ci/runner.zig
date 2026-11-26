@@ -2,6 +2,8 @@
 //! (a port of idlci's runner.rs). Each executor is a thread.
 const std = @import("std");
 const db = @import("db.zig");
+const fmt = @import("fmt.zig");
+const work = @import("work.zig");
 
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
@@ -22,6 +24,17 @@ pub const Runner = struct {
     cancelling: std.AutoHashMapUnmanaged(i64, void) = .empty,
     /// bumped by `kick`, so an idle worker claims a new job without waiting out its poll
     kicks: std.atomic.Value(u32) = .init(0),
+    /// called after each job finishes (src/integrate: CI issues), from the worker thread
+    on_finish: ?Hook = null,
+    /// set by `shutdown`: workers stop claiming jobs
+    stopping: std.atomic.Value(bool) = .init(false),
+    /// serializes preparing the work trees of patch/stack jobs
+    work_mutex: Io.Mutex = .init,
+
+    pub const Hook = struct {
+        ctx: *anyopaque,
+        f: *const fn (ctx: *anyopaque, job_id: i64) void,
+    };
 
     const Slot = struct { pgid: i32, executor: usize };
 
@@ -59,7 +72,7 @@ pub const Runner = struct {
     }
 
     fn worker(r: *Runner, n: usize) void {
-        while (true) {
+        while (!r.stopping.load(.acquire)) {
             var arena = std.heap.ArenaAllocator.init(r.gpa);
             defer arena.deinit();
             const job = r.store.claimNext(arena.allocator()) catch |e| {
@@ -69,6 +82,7 @@ pub const Runner = struct {
             };
             if (job) |j| {
                 r.run(arena.allocator(), j, n);
+                if (r.on_finish) |hook| hook.f(hook.ctx, j.id);
                 continue;
             }
             // idle: poll every 5s, or sooner after a kick
@@ -83,11 +97,35 @@ pub const Runner = struct {
     fn run(r: *Runner, a: Allocator, job: db.Job, executor: usize) void {
         const io = r.io;
         const args = job.command.idlArgs(a, job.configuration, job.strict, job.targets) catch return;
-        const dir = std.fs.path.join(a, &.{ r.root, job.project }) catch return;
-        const header = std.fmt.allocPrint(a, "[idlci] job #{d} on executor #{d} in {s}\n[idlci] git {s} {s}@{s}{s}\n$ idl {s}\n", .{
+        // a patch or stack job runs in its own work tree with the subject's commits checked out
+        var root = r.root;
+        var env = r.env;
+        var prep_log: []const u8 = "";
+        if (job.subject != null and job.checkout != null) {
+            r.work_mutex.lockUncancelable(io);
+            const prepared = work.prepare(io, a, r.root, job.subject.?, job.checkout.?);
+            r.work_mutex.unlock(io);
+            if (prepared) |p| {
+                root = p.root;
+                prep_log = p.log;
+                const map = a.create(std.process.Environ.Map) catch return;
+                map.* = r.env.clone(a) catch return;
+                map.put("PULL_ROOT", root) catch return;
+                env = map;
+            } else |e| {
+                const text = std.fmt.allocPrint(a, "[idlci] job #{d}: can't prepare the work tree for {s}: {t}\n", .{ job.id, job.subject.?, e }) catch "";
+                Io.Dir.cwd().writeFile(io, .{ .sub_path = job.log, .data = text }) catch {};
+                r.store.finish(job.id, .failed, null) catch {};
+                return;
+            }
+        }
+        const dir = std.fs.path.join(a, &.{ root, job.project }) catch return;
+        const header = std.fmt.allocPrint(a, "{s}[idlci] job #{d} on executor #{d} in {s}, started {s}\n[idlci] git {s} {s}@{s}{s}\n$ idl {s}\n", .{
+            prep_log,
             job.id,
             executor + 1,
             dir,
+            fmt.dt(a, job.started orelse db.now(io)) catch "",
             job.git.repo orelse "-",
             job.git.branch orelse "-",
             job.git.head orelse "-",
@@ -106,7 +144,7 @@ pub const Runner = struct {
         var child = std.process.spawn(io, .{
             .argv = argv,
             .cwd = .{ .path = dir },
-            .environ_map = r.env,
+            .environ_map = env,
             .stdin = .ignore,
             .stdout = .{ .file = file },
             .stderr = .{ .file = file },
@@ -138,7 +176,7 @@ pub const Runner = struct {
         const took = if (job.started) |s| db.now(io) - s else 0;
         var code_buf: [16]u8 = undefined;
         const code_text = if (code) |c| std.fmt.bufPrint(&code_buf, "{d}", .{c}) catch "-" else "-";
-        append(io, job.log, std.fmt.allocPrint(a, "\n[idlci] finished: {t} (exit {s}) in {d}s\n", .{ status, code_text, took }) catch "");
+        append(io, job.log, std.fmt.allocPrint(a, "\n[idlci] finished: {t} (exit {s}) in {d}s, at {s}\n", .{ status, code_text, took, fmt.dt(a, db.now(io)) catch "" }) catch "");
         r.store.finish(job.id, status, code) catch |e| log.err("job #{d}: {t}", .{ job.id, e });
     }
 
@@ -155,6 +193,37 @@ pub const Runner = struct {
         killGroup(s.pgid, .TERM);
         // children (compilers) may outlive the group leader, so kill the group regardless
         killLater(r.io, s.pgid);
+    }
+
+    /// Stop for good (the server got SIGTERM): no new jobs, SIGTERM every
+    /// running job's process group, wait up to `grace_s` for them to finish
+    /// (they are recorded as cancelled), then SIGKILL what's left.
+    pub fn shutdown(r: *Runner, grace_s: u32) void {
+        r.stopping.store(true, .release);
+        r.mutex.lockUncancelable(r.io);
+        var pgids: [64]i32 = undefined;
+        var count: usize = 0;
+        var it = r.running.iterator();
+        while (it.next()) |e| {
+            r.cancelling.put(r.gpa, e.key_ptr.*, {}) catch {};
+            if (count < pgids.len) {
+                pgids[count] = e.value_ptr.pgid;
+                count += 1;
+            }
+        }
+        r.mutex.unlock(r.io);
+        for (pgids[0..count]) |p| killGroup(p, .TERM);
+        var waited: u32 = 0;
+        while (waited < grace_s * 10) : (waited += 1) {
+            r.mutex.lockUncancelable(r.io);
+            const left = r.running.count();
+            r.mutex.unlock(r.io);
+            if (left == 0) break;
+            r.io.sleep(.fromMilliseconds(100), .awake) catch {};
+        }
+        for (pgids[0..count]) |p| killGroup(p, .KILL);
+        // let the workers record the outcome
+        r.io.sleep(.fromMilliseconds(200), .awake) catch {};
     }
 
     /// The executors and the job each one runs.
