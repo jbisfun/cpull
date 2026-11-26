@@ -1,12 +1,13 @@
 {% extends "theme/layout.html" %}
 {% import "theme/macros.html" as ui %}
 {% import "report.html" as rp %}
+{% import "macros.html" as hx %}
 {% macro body(b) -%}
 {% if b.kind == "markdown" %}{{ b.html }}
 {% elif b.kind == "code" %}
 {% if b.note %}<div class="alert alert-secondary py-1 small">{{ b.note }}{% if b.first_href %} <a href="{{ b.first_href }}">First lines</a>{% endif %}{% if b.next_href %} <a href="{{ b.next_href }}">Next lines</a>{% endif %}</div>{% endif %}
 <div class="cpull-code"><table><tbody>
-{% for l in b.lines %}<tr id="L{{ l.number }}"{% if l.reports %} class="cpull-flagged"{% endif %}><td class="cpull-num">{% if l.reports %}{{ rp.flags(l.reports) }}{% endif %}<a href="{{ b.open_href }}#L{{ l.number }}">{{ l.number }}</a></td><td class="cpull-line">{{ l.text }}</td></tr>
+{% for l in b.lines %}<tr id="L{{ l.number }}"{% if l.reports %} class="cpull-flagged"{% endif %}><td class="cpull-num">{% if l.reports %}{{ rp.flags(l.reports) }}{% endif %}<a class="cpull-lineno" href="{{ b.open_href }}#L{{ l.number }}"{% if b.report %} title="Line {{ l.number }}: click to report it"{% endif %}>{{ l.number }}</a></td><td class="cpull-line">{% if b.highlighted %}{{ l.html }}{% else %}{{ l.text }}{% endif %}</td></tr>
 {% endfor %}
 </tbody></table></div>
 {% elif b.kind == "binary" %}{{ ui.empty("Binary file not shown.") }}
@@ -16,12 +17,13 @@
 {%- endmacro %}
 {% block content %}
 {{ ui.heading(page.name, "", "hdd-stack", page.avatar) }}
-<p class="tool-meta">{% if page.description %}{{ page.description }} · {% endif %}{% if page.no_commits %}no commits yet{% else %}<i class="bi bi-git"></i> {{ page.ref_kind }} <code>{{ page.ref_name }}</code>{% endif %}</p>
+<p class="tool-meta">{% if page.description %}{{ page.description }}{% endif %}{% if page.no_commits %}{% if page.description %} · {% endif %}no commits yet{% endif %}</p>
 {% if page.no_commits %}
 {{ ui.empty("No commits yet. Push a branch to see its files and history.") }}
 {% for cmd in page.clone %}<pre class="console">{{ cmd.text }}</pre>{% endfor %}
 {% else %}
 <div class="d-flex flex-wrap align-items-center gap-3 mb-2 small">
+  {% if page.picker %}{{ hx.picker(page.picker) }}{% else %}<span><i class="bi bi-git"></i> {{ page.ref_kind }} <code>{{ page.ref_name }}</code></span>{% endif %}
   {% if page.default_href %}<a href="{{ page.default_href }}"><i class="bi bi-arrow-counterclockwise"></i> Default branch</a>{% endif %}
   {% if page.history_href %}<a href="{{ page.history_href }}"><i class="bi bi-clock-history"></i> History</a>{% endif %}
   {% if page.sync_status %}<form method="post" action="{{ page.sync_action }}" class="d-flex align-items-center gap-2"><span class="text-body-secondary">cpull/events: {{ page.sync_status }}</span><button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Sync now</button></form>{% endif %}
@@ -40,7 +42,7 @@
 {%- endmacro %}
 {% if page.file %}
 <div class="card cpull-file">
-  <div class="card-header">{{ pathbar() }}{% if page.body.reports %}{{ rp.list(page.body.reports) }}{% endif %}</div>
+  <div class="card-header">{{ pathbar() }}{% if page.body.reports %}{{ rp.list(page.body.reports) }}{% endif %}{% if page.body.report %}{{ rp.form(page.body.report) }}{% endif %}</div>
   {% if page.body.kind == "code" %}{{ body(page.body) }}{% else %}<div class="card-body">{{ body(page.body) }}</div>{% endif %}
 </div>
 {% else %}
@@ -67,3 +69,4 @@
 {% endif %}
 {% endif %}
 {% endblock %}
+{% block scripts %}{% if page.body and page.body.report %}{{ rp.script() }}{% endif %}{% endblock %}

@@ -76,7 +76,7 @@ pub const Workspace = struct {
         if (events) |e| if (e.name.len == 0) evt.adoptLegacyAt(io, gpa, e.path);
         const self = try arena.create(Workspace);
         self.* = .{ .io = io, .gpa = gpa, .root = root, .name = name, .repos = repos.items, .events = events, .global_config_path = global_config_path };
-        self.host = .{ .ctx = self, .page = hostPage, .source = hostSource, .merge = hostMerge };
+        self.host = .{ .ctx = self, .page = hostPage, .source = hostSource, .merge = hostMerge, .repos = hostRepos, .merge_patch = hostMergePatch };
         return self;
     }
 
@@ -403,6 +403,34 @@ fn hostPage(ctx: *anyopaque, arena: *std.heap.ArenaAllocator, session: *ui.Sessi
     return page;
 }
 
+// the pullfile's repos, for the sidebar of the pages that aren't workspace pages
+fn hostRepos(ctx: *anyopaque, arena: *std.heap.ArenaAllocator) anyerror![]const ui.WorkspaceRepo {
+    const ws: *Workspace = @ptrCast(@alignCast(ctx));
+    const aa = arena.allocator();
+    const out = try aa.alloc(ui.WorkspaceRepo, ws.repos.len);
+    for (ws.repos, out) |repo, *row| row.* = .{ .name = repo.name, .identity = try ws.identity(aa, repo) };
+    return out;
+}
+
+// merge one patch into its target branch, the way a stack merges each member
+fn hostMergePatch(ctx: *anyopaque, arena: *std.heap.ArenaAllocator, identity: []const u8, patch_id: []const u8) anyerror![]const u8 {
+    const ws: *Workspace = @ptrCast(@alignCast(ctx));
+    const repo = ws.byIdentity(identity) orelse return error.RepoNotFound;
+    const aa = arena.allocator();
+    const check = try memberMerge(ws, arena, repo, patch_id, .check);
+    switch (check.outcome) {
+        .fast_forward, .clean, .nothing => {},
+        .merged => return "This patch is already merged.",
+        .missing => return "There is no such patch.",
+        .closed => return "This patch is closed; reopen it to merge it.",
+        .conflict => return aa.print("Not merged: the patch conflicts with {s}.", .{check.target_branch}),
+        .checked_out => return aa.print("Not merged: {s} is checked out in the repo, and a merge here would leave its work tree behind.", .{check.target_branch}),
+        .out_of_date => return "Not merged: the patch's revision is out of date with its source branch.",
+    }
+    const merged = try memberMerge(ws, arena, repo, patch_id, .merge);
+    return aa.print("Merged into {s} ({s}).", .{ merged.target_branch, @tagName(check.outcome) });
+}
+
 // merge a stack and have pull record its pins
 fn hostMerge(ctx: *anyopaque, arena: *std.heap.ArenaAllocator, id: []const u8) anyerror![]const u8 {
     const ws: *Workspace = @ptrCast(@alignCast(ctx));
@@ -429,7 +457,10 @@ pub fn buildPage(ws: *Workspace, arena: *std.heap.ArenaAllocator, route: ui.Rout
     var repos: std.ArrayList(ui.Workspace.RepoRow) = .empty;
     var issues: std.ArrayList(ui.Workspace.IssueRow) = .empty;
     var patches: std.ArrayList(ui.Workspace.PatchRow) = .empty;
-    const lists = route.view == .home or route.view == .issues or route.view == .patches;
+    // every view reads each repo's head and counts (the stacks views' json
+    // reports `cloned` too); home lists the open issues and patches as well
+    const list_issues = route.view == .issues or route.view == .home;
+    const list_patches = route.view == .patches or route.view == .home;
     // the root repo, when it's the events repo, isn't one of the pullfile's
     const root_events: ?Repo = if (ws.events) |e| if (e.name.len == 0) e else null else null;
     const all = if (root_events) |e| try std.mem.concat(aa, Repo, &.{ &.{e}, ws.repos }) else ws.repos;
@@ -446,7 +477,7 @@ pub fn buildPage(ws: *Workspace, arena: *std.heap.ArenaAllocator, route: ui.Rout
             .branch = repo.branch,
             .pin = pin,
         };
-        if (lists) readRepo(ws, arena, repo, identity, &row, if (route.view == .issues) &issues else null, if (route.view == .patches) &patches else null) catch {};
+        readRepo(ws, arena, repo, identity, &row, if (list_issues) &issues else null, if (list_patches) &patches else null) catch {};
         // the root repo isn't one of the pullfile's
         if (repo.name.len > 0) try repos.append(aa, row);
     }

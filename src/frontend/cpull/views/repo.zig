@@ -8,7 +8,10 @@ const fe = @import("../frontend.zig");
 const ctx = @import("../ctx.zig");
 const markdown = @import("../markdown.zig");
 const report_views = @import("report.zig");
+const report_anchor = @import("../../../report/anchor.zig");
 const threads = @import("threads.zig");
+const admin_views = @import("admin.zig");
+const fork_views = @import("fork.zig");
 const Ctx = ctx.Ctx;
 const Repo = ui.Repo;
 const RoutablePage = ui.RoutablePage;
@@ -16,11 +19,18 @@ const RoutablePage = ui.RoutablePage;
 pub const Tab = enum { files, changes, refs, discussions, issues, patches, events, undo, settings };
 
 // the repo's "owner:name", empty in plain local mode where routes elide it
-pub fn identity(data: *const Repo) []const u8 {
+pub fn identity(data: anytype) []const u8 {
+    if (comptime isFork(@TypeOf(data))) return "";
     return switch (data.handle.location) {
         .repo => |value| value,
         .fork => "",
     };
+}
+
+// the repo views also draw a fork's tabs (views/fork.zig), which pass a
+// *const ui.Fork where a repo page passes its *const Repo
+pub fn isFork(comptime T: type) bool {
+    return T == *const ui.Fork;
 }
 
 // the url prefix the repo's post routes hang off
@@ -115,7 +125,8 @@ fn openCount(data: *const Repo, tab: Tab) ?usize {
 }
 
 // the sidebar and crumbs every repo page shares; `extra` crumbs follow the tab's
-pub fn chrome(c: Ctx, data: *const Repo, title: []const u8, extra: []const theme.Link) !fe.Chrome {
+pub fn chrome(c: Ctx, data: anytype, title: []const u8, extra: []const theme.Link) !fe.Chrome {
+    if (comptime isFork(@TypeOf(data))) return fork_views.chrome(c, data, title, extra);
     const aa = c.aa();
     const current = currentTab(c.session.current_page);
     var tasks: std.ArrayList(theme.Link) = .empty;
@@ -127,9 +138,20 @@ pub fn chrome(c: Ctx, data: *const Repo, title: []const u8, extra: []const theme
     if (data.repo.event.issue_role != null and data.issues.viewer != null) try tasks.append(aa, .{ .label = "New issue", .href = try c.routeUrl(RoutablePage.repoThreadNewRoute(.issue, id)), .icon = "plus-square" });
     if (data.repo.event.patch_role != null and data.patches.viewer != null) try tasks.append(aa, .{ .label = "New patch", .href = try c.routeUrl(RoutablePage.repoThreadNewRoute(.patch, id)), .icon = "plus-square" });
 
+    // workspace mode: the workspace's repos, like the workspace pages' sidebar
+    // (the branch picker over the files and commits takes the refs); else the
     // branches, then tags, as source-list groups
     var groups: std.ArrayList(theme.Group) = .empty;
-    for ([_]RoutablePage.RefOrOid{ .branch, .tag }) |kind| {
+    if (c.session.workspace_repos.len > 0) {
+        var rows: std.ArrayList(theme.Row) = .empty;
+        for (c.session.workspace_repos) |repo| try rows.append(aa, .{
+            .label = repo.name,
+            .href = try c.print("/{s}", .{repo.identity}),
+            .avatar = try c.repoAvatar(repo.identity, "cpull-identicon-sm"),
+            .active = std.mem.eql(u8, repo.identity, id),
+        });
+        try groups.append(aa, .{ .title = "Repositories", .rows = rows.items, .more_href = "/", .more_label = "all" });
+    } else for ([_]RoutablePage.RefOrOid{ .branch, .tag }) |kind| {
         const column = if (kind == .branch) &data.refs.branches else &data.refs.tags;
         if (kind == .tag and column.names.len == 0) continue;
         var rows: std.ArrayList(theme.Row) = .empty;
@@ -186,25 +208,134 @@ pub fn page(c: Ctx, w: *std.Io.Writer, data: *const Repo) !void {
         .patches => try threads.panel(c, w, data, .patch, &data.patches),
         .discussions => try threads.panel(c, w, data, .discuss, &data.discussions),
         .events => try events(c, w, data),
-        .undo, .settings => try unsupported(c, w, data),
+        .undo => try admin_views.undo(c, w, data),
+        .settings => try admin_views.settings(c, w, data),
     }
-}
-
-// pages the theme leaves to cpull's terminal UI (repo admin)
-fn unsupported(c: Ctx, w: *std.Io.Writer, data: *const Repo) !void {
-    try fe.emit(c, w, try chrome(c, data, "Unavailable", &.{}), "message.html", .{
-        .title = "Not in the web UI",
-        .text = "This page isn't part of the themed web UI yet. Open it in cpull's terminal UI (run cpull in the repo), or build cpull with -Dfrontend=classic for the original web UI.",
-        .links = &[_]theme.Link{.{ .label = "Files", .href = try tabHref(c, data, .files) }},
-    });
 }
 
 // --- files ---------------------------------------------------------------
 
 const max_markdown_lines = 2000;
 
+// the branch/tag picker over the files and commits views: a Bootstrap
+// dropdown of the repo's branches and tags (the refs tab's first window)
+const PickerItem = struct { label: []const u8, href: []const u8, active: bool };
+const PickerGroup = struct { title: []const u8, icon: []const u8, items: []const PickerItem };
+const Picker = struct {
+    kind: []const u8,
+    name: []const u8,
+    groups: []const PickerGroup,
+    more_href: []const u8,
+    more: bool,
+};
+
+fn refPicker(c: Ctx, data: *const Repo, kind_label: []const u8, name: []const u8, current_kind: ?RoutablePage.RefOrOid, current_value: []const u8, comptime target: enum { files, commits }) !Picker {
+    const aa = c.aa();
+    const id = identity(data);
+    var groups: std.ArrayList(PickerGroup) = .empty;
+    for ([_]RoutablePage.RefOrOid{ .branch, .tag }) |kind| {
+        const column = if (kind == .branch) &data.refs.branches else &data.refs.tags;
+        var items: std.ArrayList(PickerItem) = .empty;
+        for (column.names) |ref_name| {
+            const encoded = try ui.urlEncodeRef(aa, ref_name);
+            try items.append(aa, .{
+                .label = ref_name,
+                .href = switch (target) {
+                    .files => try c.routeUrl(RoutablePage.repoFilesRoute(id, kind, encoded, "", 0)),
+                    .commits => try c.routeUrl(RoutablePage.repoCommitsRoute(id, kind, encoded, "")),
+                },
+                .active = current_kind == kind and std.mem.eql(u8, encoded, current_value),
+            });
+        }
+        try groups.append(aa, .{ .title = if (kind == .branch) "Branches" else "Tags", .icon = if (kind == .branch) "git" else "tag", .items = items.items });
+    }
+    return .{
+        .kind = kind_label,
+        .name = name,
+        .groups = groups.items,
+        .more_href = try c.routeUrl(RoutablePage.repoRefsRoute(id, .branch, "")),
+        .more = data.refs.branches.next != null or data.refs.tags.next != null,
+    };
+}
+
+// syntax highlighting for the files view: the wiki's tree-sitter highlighter
+// (src/wiki/highlight.zig) over the shown lines, split back into one html
+// fragment per line. only the languages it has a grammar for, and not for
+// huge windows.
+const highlight = @import("../../../wiki/highlight.zig");
+const highlight_max_bytes = 1 << 20;
+
+fn highlightLanguage(name: []const u8) ?[]const u8 {
+    const extension = std.Io.Dir.path.extension(name);
+    if (extension.len < 2) return null;
+    const known = [_][]const u8{ "sh", "bash", "zsh", "json", "rs", "py", "js", "mjs", "cjs", "jsx", "yaml", "yml", "toml", "zig", "zon", "lua", "diff", "patch" };
+    for (known) |k| if (std.ascii.eqlIgnoreCase(extension[1..], k)) return k;
+    return null;
+}
+
+fn highlightLines(aa: std.mem.Allocator, lang: []const u8, lines: []const []const u8) !?[]const []const u8 {
+    var total: usize = 0;
+    for (lines) |line| total += line.len + 1;
+    if (total > highlight_max_bytes) return null;
+    var out: std.ArrayList(u8) = .empty;
+    highlight.write(aa, &out, lang, try std.mem.join(aa, "\n", lines)) catch return null;
+    const split = try splitHighlighted(aa, out.items);
+    // the highlighter keeps every byte, so the line counts agree
+    if (split.len < lines.len) return null;
+    return split[0..lines.len];
+}
+
+// highlighted html cut at its newlines, closing the spans open at each line's
+// end and opening them again on the next line. the highlighter writes only
+// `<span class="...">`, `</span>` and escaped text.
+pub fn splitHighlighted(aa: std.mem.Allocator, html: []const u8) ![]const []const u8 {
+    var result: std.ArrayList([]const u8) = .empty;
+    var open: std.ArrayList([]const u8) = .empty;
+    var line: std.ArrayList(u8) = .empty;
+    var i: usize = 0;
+    while (i < html.len) {
+        if (std.mem.startsWith(u8, html[i..], "</span>")) {
+            _ = open.pop();
+            try line.appendSlice(aa, "</span>");
+            i += "</span>".len;
+        } else if (std.mem.startsWith(u8, html[i..], "<span")) {
+            const end = (std.mem.indexOfScalarPos(u8, html, i, '>') orelse html.len - 1) + 1;
+            try open.append(aa, html[i..end]);
+            try line.appendSlice(aa, html[i..end]);
+            i = end;
+        } else if (html[i] == '\n') {
+            for (open.items) |_| try line.appendSlice(aa, "</span>");
+            try result.append(aa, try line.toOwnedSlice(aa));
+            for (open.items) |tag| try line.appendSlice(aa, tag);
+            i += 1;
+        } else {
+            const next = std.mem.indexOfAnyPos(u8, html, i, "<\n") orelse html.len;
+            try line.appendSlice(aa, html[i..next]);
+            i = next;
+        }
+    }
+    try result.append(aa, try line.toOwnedSlice(aa));
+    return result.items;
+}
+
+test splitHighlighted {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const lines = try splitHighlighted(arena.allocator(), "<span class=\"a\">x\n<span class=\"b\">y</span>\nz</span>");
+    try std.testing.expectEqual(@as(usize, 3), lines.len);
+    try std.testing.expectEqualStrings("<span class=\"a\">x</span>", lines[0]);
+    try std.testing.expectEqualStrings("<span class=\"a\"><span class=\"b\">y</span></span>", lines[1]);
+    try std.testing.expectEqualStrings("<span class=\"a\">z</span>", lines[2]);
+}
+
 const Entry = struct { name: []const u8, href: []const u8, dir: bool, path: []const u8 = "" };
-const Line = struct { number: usize, text: []const u8, reports: []const report_views.Marker = &.{} };
+const Line = struct {
+    number: usize,
+    text: []const u8,
+    // the highlighted line, when the language has a grammar
+    html: theme.vin.Str = theme.markup(""),
+    reports: []const report_views.Marker = &.{},
+};
 const Body = struct {
     kind: []const u8, // markdown, code, binary, empty, unloaded
     html: theme.vin.Str = theme.markup(""),
@@ -215,9 +346,31 @@ const Body = struct {
     open_href: []const u8 = "",
     // cpull: the open reports (anchored issues) on this file
     reports: []const report_views.Marker = &.{},
+    highlighted: bool = false,
+    // the "report this line" form (local and workspace mode)
+    report: ?ReportForm = null,
 };
 
-fn files(c: Ctx, w: *std.Io.Writer, data: *const Repo) !void {
+// what the files view's report form posts to web.zig's `report` route: the
+// file and the ref it shows; the line, title and note come from the reader
+const ReportForm = struct { action: []const u8, file: []const u8, ref: []const u8, value: []const u8 };
+
+fn reportForm(c: Ctx, f: *const Repo.Files, path: []const u8) !?ReportForm {
+    if (c.server() or f.patchrev_id != null) return null;
+    const id = switch (f.handle.location) {
+        .repo => |value| value,
+        .fork => return null,
+    };
+    return .{
+        .action = if (id.len == 0) "/report" else try c.print("/{s}/report", .{id}),
+        .file = path,
+        .ref = @tagName(f.ref_or_oid),
+        .value = f.ref_or_oid_value,
+    };
+}
+
+pub fn files(c: Ctx, w: *std.Io.Writer, data: anytype) !void {
+    const is_fork = comptime isFork(@TypeOf(data));
     const aa = c.aa();
     const f = &data.files;
     const id = identity(data);
@@ -276,15 +429,16 @@ fn files(c: Ctx, w: *std.Io.Writer, data: *const Repo) !void {
         };
     }
 
-    const sync_status = data.events.header.sync_status;
+    const sync_status: ?[]const u8 = if (is_fork) null else data.events.header.sync_status;
     const title = if (path.len > 0) path else data.header.name;
     try fe.emit(c, w, try chrome(c, data, title, &.{}), "files.html", .{
         .name = data.header.name,
         .avatar = try c.repoAvatar(data.header.name, "cpull-identicon-lg"),
-        .description = data.repo.event.description,
+        .description = if (is_fork) "" else data.repo.event.description,
         .no_commits = f.no_commits,
         .ref_kind = ref_kind,
         .ref_name = ref_name,
+        .picker = if (is_fork) null else try refPicker(c, data, ref_kind, ref_name, if (f.patchrev_id != null) null else f.ref_or_oid, f.ref_or_oid_value, .files),
         .default_href = if (explicitRef(c.session.current_page)) try c.routeUrl(RoutablePage.repoFilesRoute(id, null, "", "", 0)) else "",
         .history_href = if (f.patchrev_id == null) try c.routeUrl(f.handle.location.commitsRoute(f.ref_or_oid, f.ref_or_oid_value, "")) else "",
         .path = path_crumbs.items,
@@ -298,8 +452,8 @@ fn files(c: Ctx, w: *std.Io.Writer, data: *const Repo) !void {
         .readme = readme,
         .readme_name = readme_name,
         .sync_status = sync_status orelse "",
-        .sync_action = if (sync_status != null) try c.print("{s}/sync", .{try base(c, data)}) else "",
-        .clone = try cloneCommands(c, data),
+        .sync_action = if (sync_status != null) (if (is_fork) "" else try c.print("{s}/sync", .{try base(c, data)})) else "",
+        .clone = if (is_fork) &[_]Command{} else try cloneCommands(c, data),
     });
 }
 
@@ -348,12 +502,20 @@ fn fileBody(c: Ctx, f: *const Repo.Files, path: []const u8, entry: *const Repo.F
         .fork => "",
     }, f.anchors, path, entry.lines, entry.window_start);
     if (isMarkdown(entry.name) and first and entry.lines.len <= max_markdown_lines) {
-        return .{ .kind = "markdown", .html = try markdown.render(aa, try std.mem.join(aa, "\n", entry.lines)), .reports = reports };
+        return .{ .kind = "markdown", .html = try markdown.render(aa, try std.mem.join(aa, "\n", entry.lines)), .reports = reports, .report = try reportForm(c, f, path) };
     }
     var lines = try aa.alloc(Line, entry.lines.len);
-    for (entry.lines, 0..) |line, i| lines[i] = .{ .number = entry.window_start + i + 1, .text = line, .reports = try report_views.onLine(c, reports, entry.window_start + i + 1) };
+    const highlighted = if (highlightLanguage(entry.name)) |lang| try highlightLines(aa, lang, entry.lines) else null;
+    for (entry.lines, 0..) |line, i| lines[i] = .{
+        .number = entry.window_start + i + 1,
+        .text = line,
+        .html = if (highlighted) |h| theme.markup(h[i]) else theme.markup(""),
+        .reports = try report_views.onLine(c, reports, entry.window_start + i + 1),
+    };
     return .{
         .kind = "code",
+        .highlighted = highlighted != null,
+        .report = try reportForm(c, f, path),
         .reports = reports,
         .lines = lines,
         .open_href = file_url,
@@ -405,7 +567,7 @@ fn commitStats(c: Ctx, stats_maybe: anytype) ![]const u8 {
     return out.written();
 }
 
-fn commits(c: Ctx, w: *std.Io.Writer, data: *const Repo, cm: *const Repo.Commits) !void {
+pub fn commits(c: Ctx, w: *std.Io.Writer, data: anytype, cm: *const Repo.Commits) !void {
     const aa = c.aa();
     const location = cm.handle.location;
     var rows: std.ArrayList(CommitRow) = .empty;
@@ -430,6 +592,7 @@ fn commits(c: Ctx, w: *std.Io.Writer, data: *const Repo, cm: *const Repo.Commits
         .no_commits = cm.no_commits,
         .ref_kind = ref_kind,
         .ref_name = ref_name,
+        .picker = if (comptime isFork(@TypeOf(data))) null else try refPicker(c, data, ref_kind, ref_name, cm.ref_or_oid, cm.ref_or_oid_value, .commits),
         .path = cm.path,
         .count = cm.commit_count,
         .rows = rows.items,
@@ -453,7 +616,7 @@ fn pageRoute(cm: *const Repo.Commits, oid: []const u8) ?RoutablePage {
     return paged.withSearch(cm.search orelse return paged);
 }
 
-fn commit(c: Ctx, w: *std.Io.Writer, data: *const Repo, cm: *const Repo.Commits, item: *const Repo.Commits.Commit) !void {
+pub fn commit(c: Ctx, w: *std.Io.Writer, data: anytype, cm: *const Repo.Commits, item: *const Repo.Commits.Commit) !void {
     const location = cm.handle.location;
     const root = std.mem.allEqual(u8, item.parent_oid, '0');
     try fe.emit(c, w, try chrome(c, data, ctx.summary(item.message), &.{.{ .label = ctx.short(item.oid) }}), "commit.html", .{
@@ -477,7 +640,38 @@ fn commit(c: Ctx, w: *std.Io.Writer, data: *const Repo, cm: *const Repo.Commits,
 
 // --- diff ----------------------------------------------------------------
 
-const DiffLine = struct { number: []const u8, sign: []const u8, text: []const u8, class: []const u8 };
+const DiffLine = struct { number: []const u8, sign: []const u8, text: []const u8, class: []const u8, reports: []const report_views.Marker = &.{} };
+
+// flag the diff lines open reports point at: on the new side (kept and added
+// lines), the line holding the report's text nearest its line number, else
+// the line with its number
+fn diffMarkers(c: Ctx, identity_value: []const u8, anchors: []const report_anchor.FileAnchor, path: []const u8, lines: []DiffLine) !void {
+    if (identity_value.len == 0) return;
+    for (anchors) |a| {
+        if (!std.mem.eql(u8, a.file, path)) continue;
+        const want = std.mem.trim(u8, a.line_text, " \t\r");
+        var best: ?usize = null;
+        var best_distance: u64 = std.math.maxInt(u64);
+        for (lines, 0..) |line, i| {
+            if (line.sign[0] == '-') continue;
+            const number = std.fmt.parseInt(u64, line.number, 10) catch continue;
+            const distance = if (number > a.line) number - a.line else a.line - number;
+            const same_text = want.len > 0 and std.mem.eql(u8, std.mem.trim(u8, line.text, " \t\r"), want);
+            if (same_text and distance <= 200 and distance < best_distance) {
+                best = i;
+                best_distance = distance;
+            } else if (best == null and distance == 0) best = i;
+        }
+        const i = best orelse continue;
+        const marker: report_views.Marker = .{
+            .line = std.fmt.parseInt(u64, lines[i].number, 10) catch a.line,
+            .title = a.title,
+            .href = try c.routeUrl(RoutablePage.repoThreadCommentsRoute(.issue, identity_value, a.id, 0)),
+            .short_id = a.id[0..8],
+        };
+        lines[i].reports = try std.mem.concat(c.aa(), report_views.Marker, &.{ lines[i].reports, &.{marker} });
+    }
+}
 const DiffFile = struct {
     path: []const u8,
     status: []const u8,
@@ -487,7 +681,7 @@ const DiffFile = struct {
     hunks: []const []const DiffLine,
 };
 
-fn diff(c: Ctx, w: *std.Io.Writer, data: *const Repo, d: *const Repo.Diff) !void {
+pub fn diff(c: Ctx, w: *std.Io.Writer, data: anytype, d: *const Repo.Diff) !void {
     const aa = c.aa();
     const hunks = d.window.hunks;
     var diff_files: std.ArrayList(DiffFile) = .empty;
@@ -518,6 +712,7 @@ fn diff(c: Ctx, w: *std.Io.Writer, data: *const Repo, d: *const Repo.Diff) !void
                     },
                 });
             }
+            try diffMarkers(c, identity(data), data.files.anchors, path, lines.items);
             try tables.append(aa, lines.items);
         };
         try diff_files.append(aa, .{

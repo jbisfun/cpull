@@ -16,3 +16,6 @@ pub const serve_ssh_protocol = @import("./serve_ssh_protocol.zig");
 pub const ui = @import("./ui.zig");
 pub const web = @import("./web.zig");
 pub const demo = @import("./demo.zig");
+// the themed web UI (src/frontend), for programs that serve it as their
+// `cpull_frontend` (the demo, main_demo.zig)
+pub const themed_frontend = @import("./frontend/cpull/frontend.zig");

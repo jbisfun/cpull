@@ -1,0 +1,21 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{#- A confirmation page: {heading, icon, title, back, text, facts: [{term, value}],
+    buttons: [{label, action, note, primary}]}; a button without an action is
+    shown disabled with its note. -#}
+{% block tasks_before %}{{ ui.back(page.back, "Back") }}{% endblock %}
+{% block content %}
+{{ ui.heading(page.heading, "", page.icon) }}
+<p class="tool-meta"><a href="{{ page.back }}">{{ page.title }}</a></p>
+{% if page.facts %}<dl class="tool-facts mb-3">{% for f in page.facts %}<dt>{{ f.term }}</dt><dd><code>{{ f.value }}</code></dd>{% endfor %}</dl>{% endif %}
+<div class="alert alert-secondary" style="max-width: 48rem">{{ page.text }}</div>
+<div class="d-flex flex-wrap gap-3 align-items-start">
+  {% for b in page.buttons %}
+  <form method="post" action="{{ b.action }}" class="cpull-confirm">
+    <button type="submit" class="btn btn-sm {% if b.primary %}btn-primary{% else %}btn-outline-secondary{% endif %}"{% if not b.action %} disabled{% endif %}>{{ b.label }}</button>
+    {% if b.note %}<div class="form-text">{{ b.note }}</div>{% endif %}
+  </form>
+  {% endfor %}
+  <a class="btn btn-sm btn-outline-secondary" href="{{ page.back }}">Cancel</a>
+</div>
+{% endblock %}

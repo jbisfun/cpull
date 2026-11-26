@@ -25,6 +25,8 @@ const cookie_name = "cpull_session";
 const session_cookie_fmt = cookie_name ++ "={s}; Path=/; HttpOnly; SameSite=Lax; Max-Age=34560000";
 const form_flash_cookie = "cpull_form_flash";
 const wiki_serve = @import("wiki/serve.zig");
+const multipart = @import("multipart.zig");
+const report_web = @import("report/web.zig");
 const local_flash_cookie = "cpull_local_flash";
 const local_required_title_prefix = "required_title:";
 const local_sync_failure_prefix = "sync:";
@@ -279,7 +281,7 @@ fn handleRequest(
                 }
             },
             .local => |local| {
-                const PostRoute = enum { new, edit, remove, open, close, resolve, sync, attach, assign, unassign, search, merge };
+                const PostRoute = enum { new, edit, remove, open, close, resolve, sync, attach, assign, unassign, search, merge, report };
                 inline for (@typeInfo(PostRoute).@"enum".field_names) |name| {
                     const suffix = "/" ++ name;
                     if (std.mem.endsWith(u8, path, suffix)) {
@@ -297,6 +299,7 @@ fn handleRequest(
                             .assign => handleAssign(io, request, allocator, base, host),
                             .unassign => handleUnassign(io, request, allocator, base, host),
                             .search => handleSearch(request, allocator, base, host),
+                            .report => handleReport(io, request, allocator, base, host),
                         };
                     }
                 }
@@ -1788,6 +1791,10 @@ fn handleAttach(
     const source = request_repo.source;
     if (!try source.canModify(io, allocator, actor, parts.kind, &parts.id_bytes)) return respondForbidden(request);
 
+    // a plain html form (the themed thread page) uploads multipart/form-data
+    if (getHeader(request, "content-type")) |content_type| if (multipart.boundary(content_type)) |boundary|
+        return attachMultipart(io, request, allocator, base, host, parts, source, author, boundary);
+
     const name = (try attachmentName(allocator, request)) orelse return respondUploadError(request, .bad_request, "attachment needs a name");
     defer allocator.free(name);
     if (!evt.Attachment.nameValid(name)) return respondUploadError(request, .bad_request, "invalid attachment name");
@@ -1816,6 +1823,97 @@ fn handleAttach(
 
     // the client reloads the page itself
     try request.respond("", .{ .status = .no_content, .keep_alive = false });
+}
+
+// the multipart form's file field becomes the attachment, then the page the
+// form was on shows again. the body is read whole, since its parts are
+// framed by a boundary rather than a length.
+fn attachMultipart(
+    io: std.Io,
+    request: *std.http.Server.Request,
+    allocator: std.mem.Allocator,
+    base: []const u8,
+    host: Host,
+    parts: AttachTargetParts,
+    source: ui.RepoSource,
+    author: evt.CommitAuthor,
+    boundary: []const u8,
+) !void {
+    // room for the part headers and boundaries around the largest file
+    const overhead = 64 * 1024;
+    const size = request.head.content_length orelse return respondUploadError(request, .length_required, "attachments must declare a content length");
+    if (size > evt.Attachment.max_size + overhead) return respondUploadError(request, .payload_too_large, "attachment is too large");
+    var body_buf: [4096]u8 = undefined;
+    const body = try (try request.readerExpectContinue(&body_buf)).allocRemaining(allocator, .limited(evt.Attachment.max_size + overhead));
+    defer allocator.free(body);
+
+    var delimiter_buf: [80]u8 = undefined;
+    var it = multipart.iterate(body, boundary, &delimiter_buf) catch return respondUploadError(request, .bad_request, "malformed upload");
+    const file: multipart.Part = while (it.next() catch return respondUploadError(request, .bad_request, "malformed upload")) |part| {
+        if (std.mem.eql(u8, part.name, "file") and part.filename != null) break part;
+    } else return respondUploadError(request, .bad_request, "the upload has no file");
+    // some browsers send a path; the attachment is named by its last component
+    const raw_name = file.filename.?;
+    const name = if (std.mem.lastIndexOfAny(u8, raw_name, "/\\")) |at| raw_name[at + 1 ..] else raw_name;
+    if (name.len == 0 and file.data.len == 0) return respondUploadError(request, .bad_request, "choose a file to attach");
+    if (!evt.Attachment.nameValid(name)) return respondUploadError(request, .bad_request, "invalid attachment name");
+    if (file.data.len == 0) return respondUploadError(request, .bad_request, "attachment is empty");
+    if (file.data.len > evt.Attachment.max_size) return respondUploadError(request, .payload_too_large, "attachment is too large");
+
+    const target_id_hex = std.fmt.bytesToHex(parts.id_bytes, .lower);
+    var reader: std.Io.Reader = .fixed(file.data);
+    const blob: evt.Blob = .{ .name = name, .size = file.data.len, .reader = &reader };
+    switch (source.repo_kind) {
+        inline else => |repo_kind| {
+            var any_repo = try rp.AnyRepo(repo_kind, .{}).open(io, allocator, source.localInitOpts());
+            defer any_repo.deinit(io, allocator);
+            switch (any_repo) {
+                inline else => |*repo| _ = evt.Attachment.create(host.event(), repo_kind, repo.self_repo_opts, io, allocator, repo, parts.kind, &target_id_hex, blob, author) catch |err| switch (err) {
+                    error.TargetNotFound => return respondAttachmentTargetNotFound(request),
+                    else => return err,
+                },
+            }
+        },
+    }
+    try request.respond("", .{ .status = .see_other, .keep_alive = false, .extra_headers = &.{.{ .name = "location", .value = base }} });
+}
+
+// file a cpull report (an issue anchored at a line) from the files view's form,
+// in the repo the url's base names, then show the new issue
+fn handleReport(io: std.Io, request: *std.http.Server.Request, allocator: std.mem.Allocator, base: []const u8, host: Host) !void {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const aa = arena.allocator();
+    const author = ((try authorizeWrite(io, allocator, &arena, request, host, base, .write, .issue)) orelse return).author;
+    const body = try readFormBody(request, allocator);
+    defer allocator.free(body);
+    const field = struct {
+        fn get(a: std.mem.Allocator, b: []const u8, key: []const u8) ![]const u8 {
+            return (try parseFormField(a, b, key)) orelse "";
+        }
+    }.get;
+    const line = std.fmt.parseInt(u64, std.mem.trim(u8, try field(aa, body, "line"), " "), 10) catch return respondUploadError(request, .bad_request, "the line must be a number");
+    const title = try field(aa, body, "title");
+    const quote = try field(aa, body, "quote");
+    const request_repo = (try requestRepoSource(io, allocator, host, base)) orelse return respondRepoNotFound(request);
+    defer request_repo.deinit(allocator);
+    const id = report_web.file(io, allocator, request_repo.source, author, .{
+        .file = try field(aa, body, "file"),
+        .line = line,
+        .ref_kind = std.meta.stringToEnum(ui.RoutablePage.RefOrOid, try field(aa, body, "ref")),
+        .ref_value = try field(aa, body, "value"),
+        .note = try std.mem.replaceOwned(u8, aa, try field(aa, body, "note"), "\r\n", "\n"),
+        .title = if (title.len == 0) null else title,
+        .quote = if (quote.len == 0) null else quote,
+        .labels = try field(aa, body, "labels"),
+    }) catch |err| switch (err) {
+        error.InvalidLineNumber => return respondUploadError(request, .bad_request, "there is no such line in the file"),
+        error.InvalidPath, error.NotAFile, error.BinaryFile => return respondUploadError(request, .bad_request, "there is no such text file"),
+        error.RefNotFound => return respondUploadError(request, .bad_request, "there is no such branch, tag or commit"),
+        else => |e| return e,
+    };
+    const location = try aa.print("{s}/issue:{s}", .{ base, &id });
+    try request.respond("", .{ .status = .see_other, .keep_alive = false, .extra_headers = &.{.{ .name = "location", .value = location }} });
 }
 
 // assign the posted email, or the email of the user it names, to the thread the
@@ -2604,11 +2702,36 @@ fn handleWorkspaceMerge(
     // the body carries nothing, but it must be read before responding
     const body = try readFormBody(request, allocator);
     allocator.free(body);
-    const route = ui.RoutablePage.fromUrlWorkspace(base) orelse return respondRepoNotFound(request);
-    if (route != .workspace or route.workspace.view != .stack) return respondRepoNotFound(request);
+    const route = ui.RoutablePage.fromUrlWorkspace(base) orelse return handleWorkspacePatchMerge(request, allocator, base, local);
+    if (route != .workspace or route.workspace.view != .stack) return handleWorkspacePatchMerge(request, allocator, base, local);
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
     const message = workspace.merge(workspace.ctx, &arena, route.workspace.selected.slice()) catch |err| @errorName(err);
+    return respondWorkspaceFlash(request, &arena, base, message);
+}
+
+// merge the single patch a workspace repo's patch url names (the themed merge
+// page's form), then show the patch with what the merge reported
+fn handleWorkspacePatchMerge(
+    request: *std.http.Server.Request,
+    allocator: std.mem.Allocator,
+    base: []const u8,
+    local: LocalHost,
+) !void {
+    const workspace = local.workspace orelse return respondRepoNotFound(request);
+    const merge_patch = workspace.merge_patch orelse return respondRepoNotFound(request);
+    const parts = commentBaseParts(.{ .local = local }, base) orelse return respondRepoNotFound(request);
+    if (parts.thread_kind != .patch or parts.comment_id != null or parts.repo_base.len < 2) return respondRepoNotFound(request);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const id = std.fmt.bytesToHex(parts.thread_id, .lower);
+    const message = merge_patch(workspace.ctx, &arena, parts.repo_base[1..], &id) catch |err| @errorName(err);
+    const location = try arena.allocator().print("{s}/patch:{s}", .{ parts.repo_base, &id });
+    return respondWorkspaceFlash(request, &arena, location, message);
+}
+
+// redirect to `location` with `message` in the flash the layout shows
+fn respondWorkspaceFlash(request: *std.http.Server.Request, arena: *std.heap.ArenaAllocator, location: []const u8, message: []const u8) !void {
     var encoded: std.Io.Writer.Allocating = .init(arena.allocator());
     try std.Uri.Component.percentEncode(&encoded.writer, message, struct {
         fn isUnreserved(c: u8) bool {
@@ -2619,7 +2742,7 @@ fn handleWorkspaceMerge(
     try request.respond("", .{
         .status = .see_other,
         .extra_headers = &.{
-            .{ .name = "location", .value = base },
+            .{ .name = "location", .value = location },
             .{ .name = "set-cookie", .value = cookie },
         },
     });
@@ -2671,6 +2794,10 @@ fn renderPage(
     };
     session.io = io;
     session.data.now = std.math.cast(i64, std.Io.Timestamp.now(io, .real).toSeconds()) orelse return error.TimestampOutOfRange;
+    // workspace mode: the repo list for the sidebar of the non-workspace pages
+    if (host == .local) if (host.local.workspace) |workspace| if (workspace.repos) |list| if (session.data.current_page.parent() != .workspace) {
+        session.data.workspace_repos = list(workspace.ctx, &page_arena) catch &.{};
+    };
 
     var page = try ui.Page.init(session.page_arena, &session, session.data.current_page);
     var root = try ui.initRoot(allocator, &page, &session);

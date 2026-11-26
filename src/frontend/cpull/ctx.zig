@@ -4,6 +4,7 @@ const std = @import("std");
 const ui = @import("../../ui.zig");
 const evt = @import("../../event.zig");
 const theme = @import("../theme/theme.zig");
+const localtime = @import("localtime.zig");
 
 pub const Ctx = struct {
     gpa: std.mem.Allocator,
@@ -43,7 +44,13 @@ pub const Ctx = struct {
 
     pub fn time(c: Ctx, secs: i64) !theme.Time {
         const text = try ui.timestamp.format(c.aa(), secs, c.session.now);
-        return .{ .relative = text.relative, .exact = text.exact };
+        if (secs < 0) return .{ .relative = text.relative, .exact = text.exact };
+        return .{
+            .relative = text.relative,
+            .exact = text.exact,
+            .local = (try localtime.format(c.aa(), secs)) orelse "",
+            .utc = try localtime.utc(c.aa(), @intCast(secs)),
+        };
     }
 
     // the failed form retained for this page, when it is of kind `tag`

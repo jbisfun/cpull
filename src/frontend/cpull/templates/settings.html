@@ -1,0 +1,87 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{% import "macros.html" as hx %}
+{% block content %}
+{{ ui.heading("Settings", "", "gear") }}
+{{ ui.tabs(page.tabs, "mb-3") }}
+{% if page.error_text %}<div class="alert alert-danger py-2" role="alert">{{ page.error_text }}</div>{% endif %}
+{% if page.view == "settings" %}
+<form method="post" action="{{ page.settings_action }}" style="max-width: 40rem">
+  {{ ui.field("Name", "name", page.form.name, "Renaming changes the repository's urls.", false, true, true) }}
+  {{ ui.textarea("Description", "description", page.form.description, 3) }}
+  <fieldset class="mb-3">
+    <legend class="form-label fs-6">Who can read it</legend>
+    {% for o in page.form.access %}<div class="form-check"><input class="form-check-input" type="radio" name="access" id="access-{{ o.value }}" value="{{ o.value }}"{% if o.selected %} checked{% endif %}><label class="form-check-label" for="access-{{ o.value }}">{{ o.label }}</label></div>{% endfor %}
+  </fieldset>
+  <div class="row g-3 mb-3">
+    {% for r in page.form.roles %}
+    <div class="col-sm-4">
+      <label class="form-label" for="f-{{ r.name }}">{{ r.label }}</label>
+      <select class="form-select form-select-sm" id="f-{{ r.name }}" name="{{ r.name }}">{% for o in r.options %}<option value="{{ o.value }}"{% if o.selected %} selected{% endif %}>{{ o.label }}</option>{% endfor %}</select>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="form-text mb-3">“members” are the people this repository grants push access; “nobody” turns the tab off. The hash function, <code>{{ page.form.hash }}</code>, is fixed when the repository is made.</div>
+  <button type="submit" class="btn btn-primary btn-sm">Save settings</button>
+</form>
+{% elif page.view == "members" %}
+{% if page.confirm %}
+<form method="post" action="{{ page.confirm.action }}">
+  <div class="alert alert-secondary" style="max-width: 40rem">{{ page.confirm.text }}</div>
+  <button type="submit" class="btn btn-danger btn-sm">{{ page.confirm.submit }}</button>
+  <a class="btn btn-outline-secondary btn-sm ms-1" href="{{ page.confirm.back }}">Cancel</a>
+</form>
+{% else %}
+<p class="tool-meta"><strong>Members</strong> can push to this repository; <strong>owners</strong> can also add and remove members.</p>
+<form method="post" action="{{ page.grant_action }}" class="input-group input-group-sm mb-3" style="max-width: 28rem">
+  <input class="form-control" name="name" value="{{ page.add_value }}" placeholder="Username" autocomplete="off" required aria-label="Username">
+  <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-person-plus"></i> Add member</button>
+</form>
+<table class="table table-sm align-middle" style="max-width: 40rem">
+  <thead><tr><th>User</th><th>Role</th><th></th></tr></thead>
+  <tbody>
+  {% for m in page.members %}
+  <tr>
+    <td><a href="{{ m.href }}">{{ m.name }}</a></td>
+    <td>{{ m.role }}</td>
+    <td class="text-end text-nowrap">
+      {% if m.promote_action %}<form class="d-inline" method="post" action="{{ m.promote_action }}"><button class="btn btn-sm btn-outline-secondary" type="submit">Make owner</button></form>{% endif %}
+      {% if m.demote_href %}<a class="btn btn-sm btn-outline-secondary" href="{{ m.demote_href }}">Make member</a>{% endif %}
+      <a class="btn btn-sm btn-outline-danger" href="{{ m.revoke_href }}">Remove</a>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="3" class="text-body-secondary">Only the creator so far.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{{ ui.pager(page.members_prev, page.members_next) }}
+{% endif %}
+{% elif page.view == "branches" %}
+<p class="tool-meta">The default branch is what the repository page shows and clones check out. Protected branches can't be deleted or force pushed; owners push to them directly, members change them by merging a patch.</p>
+<form method="post" action="{{ page.default_action }}" class="input-group input-group-sm mb-3" style="max-width: 28rem">
+  <span class="input-group-text">Default branch</span>
+  <input class="form-control font-monospace" name="name" value="{{ page.default_value }}" autocomplete="off" required>
+  <button class="btn btn-outline-secondary" type="submit">Set</button>
+</form>
+<form method="post" action="{{ page.protect_action }}" class="input-group input-group-sm mb-3" style="max-width: 28rem">
+  <input class="form-control font-monospace" name="name" value="{{ page.add_value }}" placeholder="Branch to protect" autocomplete="off" required aria-label="Branch to protect">
+  <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-shield-lock"></i> Protect</button>
+</form>
+<ul class="list-group" style="max-width: 28rem">
+  {% for b in page.branches %}
+  <li class="list-group-item d-flex align-items-center"><i class="bi bi-shield-lock me-2 text-body-secondary"></i><a class="font-monospace" href="{{ b.href }}">{{ b.name }}</a>
+    <form class="ms-auto" method="post" action="{{ b.unprotect_action }}"><button class="btn btn-sm btn-link text-danger p-0" type="submit" title="Unprotect"><i class="bi bi-x-lg"></i></button></form></li>
+  {% else %}
+  <li class="list-group-item text-body-secondary">No protected branches.</li>
+  {% endfor %}
+</ul>
+{% elif page.view == "delete" %}
+<form method="post" action="{{ page.delete_action }}" style="max-width: 32rem">
+  <div class="alert alert-danger">Deleting the repository removes it, its history and everything filed in it, for good.</div>
+  {{ ui.field("Type " ~ page.delete_confirm_text ~ " to confirm", "confirm", page.delete_typed, "", false, true, true) }}
+  <div class="mb-3"><label class="form-label" for="f-password">Your password</label><input class="form-control" type="password" id="f-password" name="password" autocomplete="current-password" required></div>
+  <button type="submit" class="btn btn-danger btn-sm"><i class="bi bi-trash"></i> Permanently delete this repository</button>
+</form>
+{% endif %}
+{% endblock %}

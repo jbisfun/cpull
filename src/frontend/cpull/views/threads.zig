@@ -10,6 +10,8 @@ const ctx = @import("../ctx.zig");
 const markdown = @import("../markdown.zig");
 const repo_views = @import("repo.zig");
 const report_views = @import("report.zig");
+const resolve_views = @import("resolve.zig");
+const patch_views = @import("patch.zig");
 const Ctx = ctx.Ctx;
 const Repo = ui.Repo;
 const RoutablePage = ui.RoutablePage;
@@ -26,7 +28,7 @@ pub fn Data(comptime kind: evt.EventKind) type {
 
 const Names = struct { noun: []const u8, plural: []const u8, title: []const u8, placeholder: []const u8 };
 
-fn names(comptime kind: evt.EventKind) Names {
+pub fn names(comptime kind: evt.EventKind) Names {
     return switch (kind) {
         .issue => .{ .noun = "issue", .plural = "issues", .title = "Issues", .placeholder = "Words, label:name, assignee:name" },
         .discuss => .{ .noun = "discussion", .plural = "discussions", .title = "Discussions", .placeholder = "Words, label:name" },
@@ -41,18 +43,24 @@ pub fn panel(c: Ctx, w: *std.Io.Writer, repo: *const Repo, comptime kind: evt.Ev
     const view = @tagName(data.view);
     if (std.meta.stringToEnum(FormView, view)) |form| return formPage(c, w, repo, kind, data, form);
     if (std.mem.eql(u8, view, "labels")) return listPage(c, w, repo, kind, data, null, true);
-    // conflicts, resolve, publish and merge stay in cpull's terminal UI
-    if (std.mem.eql(u8, view, "conflicts") or std.mem.eql(u8, view, "resolve") or std.mem.eql(u8, view, "publish") or std.mem.eql(u8, view, "merge")) {
-        return fe.emit(c, w, try repo_views.chrome(c, repo, names(kind).title, &.{}), "message.html", .{
-            .title = "Not in the web UI",
-            .text = "Resolving conflicts and publishing or merging patches aren't part of the themed web UI yet. Use cpull's terminal UI, or build cpull with -Dfrontend=classic.",
-            .links = &[_]theme.Link{.{ .label = "All " ++ comptime names(kind).plural, .href = try firstListUrl(c, kind, data) }},
-        });
+    // conflicted threads, and settling one's conflict (views/resolve.zig);
+    // publishing a draft patch and merging a patch
+    if (comptime hasConflicts(kind)) {
+        if (std.mem.eql(u8, view, "conflicts")) return listPage(c, w, repo, kind, data, null, false);
+        if (std.mem.eql(u8, view, "resolve")) return resolve_views.page(c, w, repo, kind, data);
+    }
+    if (comptime kind == .patch) {
+        if (std.mem.eql(u8, view, "publish")) return patch_views.publish(c, w, repo, data);
+        if (std.mem.eql(u8, view, "merge")) return patch_views.merge(c, w, repo, data);
     }
     const status = std.meta.stringToEnum(Data(kind).Status, view);
     if (data.selected_id.len == 0 or listWindow(c, kind)) return listPage(c, w, repo, kind, data, status, false);
     const entry = data.selectedThread() orelse return notFound(c, w, repo, kind, data);
     try detail(c, w, repo, kind, data, entry);
+}
+
+pub fn hasConflicts(comptime kind: evt.EventKind) bool {
+    return @hasField(Data(kind), "conflicts");
 }
 
 fn listWindow(c: Ctx, comptime kind: evt.EventKind) bool {
@@ -71,23 +79,23 @@ fn statusOf(comptime kind: evt.EventKind, entry: *const Data(kind).Entry) Data(k
     };
 }
 
-fn isDraft(comptime kind: evt.EventKind, entry: *const Data(kind).Entry) bool {
+pub fn isDraft(comptime kind: evt.EventKind, entry: *const Data(kind).Entry) bool {
     return if (kind == .patch) entry.draft else false;
 }
 
-fn isConflicted(comptime kind: evt.EventKind, entry: *const Data(kind).Entry) bool {
+pub fn isConflicted(comptime kind: evt.EventKind, entry: *const Data(kind).Entry) bool {
     return if (@hasField(Data(kind).Entry, "conflicted")) entry.conflicted else false;
 }
 
-fn threadUrl(c: Ctx, comptime kind: evt.EventKind, identity: []const u8, id: []const u8) ![]const u8 {
+pub fn threadUrl(c: Ctx, comptime kind: evt.EventKind, identity: []const u8, id: []const u8) ![]const u8 {
     return c.routeUrl(RoutablePage.repoThreadCommentsRoute(kind, identity, id, 0));
 }
 
-fn listUrl(c: Ctx, comptime kind: evt.EventKind, identity: []const u8, status: Data(kind).Status, search: []const u8) ![]const u8 {
+pub fn listUrl(c: Ctx, comptime kind: evt.EventKind, identity: []const u8, status: Data(kind).Status, search: []const u8) ![]const u8 {
     return c.url(try ui.widget.thread.searchRoute(Data(kind).listRoute(identity, status, ""), if (search.len == 0) null else search));
 }
 
-fn firstListUrl(c: Ctx, comptime kind: evt.EventKind, data: *const Data(kind)) ![]const u8 {
+pub fn firstListUrl(c: Ctx, comptime kind: evt.EventKind, data: *const Data(kind)) ![]const u8 {
     return listUrl(c, kind, data.identity, std.enums.values(Data(kind).Status)[0], "");
 }
 
@@ -111,7 +119,7 @@ fn capitalized(comptime word: []const u8) []const u8 {
     }
 }
 
-fn statusLabel(status: anytype) []const u8 {
+pub fn statusLabel(status: anytype) []const u8 {
     return switch (status) {
         inline else => |value| comptime capitalized(@tagName(value)),
     };
@@ -158,8 +166,9 @@ fn listPage(c: Ctx, w: *std.Io.Writer, repo: *const Repo, comptime kind: evt.Eve
     if (kind == .patch) if (c.server() and (data.drafts.count > 0 or data.view == .drafts)) {
         try tabs.append(aa, .{ .label = "Drafts", .href = try c.routeUrl(Data(kind).draftsRoute(data.identity)), .active = data.view == .drafts, .count = data.drafts.count });
     };
-    if (comptime @hasField(Data(kind), "conflicts")) if (data.conflicts.count > 0) {
-        try tabs.append(aa, .{ .label = "Conflicts", .href = try c.routeUrl(Data(kind).conflictsRoute(data.identity, "")), .count = data.conflicts.count });
+    const conflicts_view = std.mem.eql(u8, view, "conflicts");
+    if (comptime hasConflicts(kind)) if (data.conflicts.count > 0 or conflicts_view) {
+        try tabs.append(aa, .{ .label = "Conflicts", .href = try c.routeUrl(Data(kind).conflictsRoute(data.identity, "")), .active = conflicts_view, .count = data.conflicts.count });
     };
 
     var rows: std.ArrayList(Row) = .empty;
@@ -174,10 +183,10 @@ fn listPage(c: Ctx, w: *std.Io.Writer, repo: *const Repo, comptime kind: evt.Eve
         label_chips = list.items;
         if (list.items.len == 0) empty = "No " ++ n.noun ++ " has a label yet.";
     } else {
-        const win = if (status) |value| data.window(value) else switch (kind) {
+        const win = if (status) |value| data.window(value) else if (comptime hasConflicts(kind)) (if (conflicts_view) &data.conflicts else switch (kind) {
             .patch => &data.drafts,
             else => data.window(std.enums.values(Data(kind).Status)[0]),
-        };
+        }) else data.window(std.enums.values(Data(kind).Status)[0]);
         for (win.items) |*entry| {
             const s = statusOf(kind, entry);
             var assignees: std.ArrayList([]const u8) = .empty;
@@ -196,11 +205,11 @@ fn listPage(c: Ctx, w: *std.Io.Writer, repo: *const Repo, comptime kind: evt.Eve
                 .conflict = isConflicted(kind, entry),
             });
         }
-        const list_name = if (status) |value| try c.print("{s} {s}", .{ @tagName(value), n.plural }) else "drafts";
+        const list_name = if (status) |value| try c.print("{s} {s}", .{ @tagName(value), n.plural }) else if (conflicts_view) "conflicted " ++ n.plural else "drafts";
         if (win.items.len == 0) empty = if (win.prev_id != null) try c.print("No more {s}.", .{list_name}) else if (data.search != null) try c.print("No {s} match this search.", .{list_name}) else try c.print("No {s}.", .{list_name});
         for ([_]?[]const u8{ win.prev_id, win.next_id }, 0..) |id_maybe, i| {
             const id = id_maybe orelse continue;
-            const list_route = (if (status) |value| Data(kind).listRoute(data.identity, value, "") else if (kind == .patch) Data(kind).draftsRoute(data.identity) else null) orelse return error.RouteTooLong;
+            const list_route = (if (status) |value| Data(kind).listRoute(data.identity, value, "") else if (conflicts_view) (if (comptime hasConflicts(kind)) Data(kind).conflictsRoute(data.identity, "") else @as(?RoutablePage, null)) else if (kind == .patch) Data(kind).draftsRoute(data.identity) else @as(?RoutablePage, null)) orelse return error.RouteTooLong;
             var route = list_route.startingAt(id) orelse return error.RouteTooLong;
             if (status != null) if (data.search) |query| {
                 route = route.withSearch(query) orelse return error.RouteTooLong;
@@ -231,7 +240,7 @@ fn listPage(c: Ctx, w: *std.Io.Writer, repo: *const Repo, comptime kind: evt.Eve
     });
 }
 
-fn notFound(c: Ctx, w: *std.Io.Writer, repo: *const Repo, comptime kind: evt.EventKind, data: *const Data(kind)) !void {
+pub fn notFound(c: Ctx, w: *std.Io.Writer, repo: anytype, comptime kind: evt.EventKind, data: *const Data(kind)) !void {
     const n = comptime names(kind);
     try fe.emit(c, w, try repo_views.chrome(c, repo, n.title, &.{}), "message.html", .{
         .title = comptime capitalized(n.noun) ++ " not found",
@@ -281,11 +290,19 @@ fn windowUrl(c: Ctx, comptime kind: evt.EventKind, identity: []const u8, thread_
     return c.routeUrl(route);
 }
 
-const Attachment = struct { name: []const u8, href: []const u8, remove_href: []const u8 };
+const Attachment = struct { name: []const u8, href: []const u8, remove_href: []const u8, image: bool };
+
+// whether the browser shows the attachment inline as an image (web.zig serves
+// these types inline)
+fn isImage(name: []const u8) bool {
+    const extension = std.Io.Dir.path.extension(name);
+    for ([_][]const u8{ ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg" }) |e| if (std.ascii.eqlIgnoreCase(extension, e)) return true;
+    return false;
+}
 const Assignee = struct { name: []const u8, href: []const u8, unassign_action: []const u8 };
 const Fact = struct { term: []const u8, value: []const u8, href: []const u8 = "", mono: bool = false };
 
-fn detail(c: Ctx, w: *std.Io.Writer, repo: *const Repo, comptime kind: evt.EventKind, data: *const Data(kind), entry: *const Data(kind).Entry) !void {
+pub fn detail(c: Ctx, w: *std.Io.Writer, repo: anytype, comptime kind: evt.EventKind, data: *const Data(kind), entry: *const Data(kind).Entry) !void {
     const n = comptime names(kind);
     const aa = c.aa();
     const status = statusOf(kind, entry);
@@ -333,6 +350,7 @@ fn detail(c: Ctx, w: *std.Io.Writer, repo: *const Repo, comptime kind: evt.Event
         .name = attachment.name,
         .href = if (data.identity.len == 0) try c.print("/attachment:{s}", .{&attachment.id}) else try c.print("/{s}/attachment:{s}", .{ data.identity, &attachment.id }),
         .remove_href = if (entry.can_modify) try c.routeUrl(RoutablePage.repoThreadRemoveRoute(kind, data.identity, entry.id, "", &attachment.id)) else "",
+        .image = isImage(attachment.name),
     });
 
     // a patch's proposal
@@ -372,6 +390,8 @@ fn detail(c: Ctx, w: *std.Io.Writer, repo: *const Repo, comptime kind: evt.Event
         .assign_action = if (kind == .issue and entry.can_modify) try c.print("{s}/assign", .{thread_url}) else "",
         .assign_placeholder = if (c.server()) "Username or email" else "Email",
         .attachments = attachments.items,
+        // a multipart form posting to web.zig's attach route, which then shows this page again
+        .attach_action = if (entry.can_modify and !isConflicted(kind, entry) and !draft) try c.print("{s}/attach", .{thread_url}) else "",
         .facts = facts.items,
         .anchor = anchor,
         .conflict = isConflicted(kind, entry),
@@ -386,6 +406,9 @@ fn detail(c: Ctx, w: *std.Io.Writer, repo: *const Repo, comptime kind: evt.Event
         .close_action = if (can_act and kind != .discuss and !draft and open) try c.print("{s}/close", .{thread_url}) else "",
         .open_action = if (can_act and kind != .discuss and !draft and closed) try c.print("{s}/open", .{thread_url}) else "",
         .edit_href = if (can_act) try c.routeUrl(RoutablePage.repoThreadEditRoute(kind, data.identity, entry.id)) else "",
+        .resolve_href = if (comptime hasConflicts(kind)) (if (entry.can_modify and isConflicted(kind, entry)) try c.routeUrl(Data(kind).resolveRoute(data.identity, entry.id, "")) else "") else "",
+        .publish_href = if (comptime kind == .patch) (if (draft and data.viewer != null) try c.routeUrl(Data(kind).publishRoute(data.identity, entry.id)) else "") else "",
+        .merge_href = if (comptime kind == .patch) (if (patch_views.mergeOffered(c, data, entry)) try c.routeUrl(Data(kind).mergeRoute(data.identity, entry.id)) else "") else "",
         .remove_href = if (entry.can_modify) try c.routeUrl(RoutablePage.repoThreadRemoveRoute(kind, data.identity, entry.id, "", "")) else "",
     });
 }

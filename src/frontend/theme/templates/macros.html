@@ -10,9 +10,10 @@
 <li><a href="{{ t.href }}"{% if t.active %} class="active" aria-current="page"{% endif %}><i class="bi bi-{{ t.icon }}"></i>{{ t.label }}{% if t.count %}<span class="badge rounded-pill text-bg-secondary tool-count">{{ t.count }}</span>{% endif %}</a></li>
 {%- endmacro %}
 
-{#- A relative time with the exact one in its title: {relative, exact}. -#}
+{#- A time: {relative, exact, local, utc}. Shows the local time when there is
+    one, with the UTC time and the relative one in its title. -#}
 {% macro time(t) -%}
-{% if t.exact %}<time datetime="{{ t.exact }}" title="{{ t.exact }}">{{ t.relative }}</time>{% else %}<span>{{ t.relative }}</span>{% endif %}
+{% if t.exact %}<time datetime="{{ t.exact }}" title="{% if t.utc %}{{ t.utc }}{% else %}{{ t.exact }}{% endif %} · {{ t.relative }}">{% if t.local %}{{ t.local }}{% else %}{{ t.relative }}{% endif %}</time>{% else %}<span>{{ t.relative }}</span>{% endif %}
 {%- endmacro %}
 
 {#- Bootstrap nav tabs over a bordered block: [{label, href, active, count}]. -#}

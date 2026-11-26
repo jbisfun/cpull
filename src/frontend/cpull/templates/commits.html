@@ -3,7 +3,7 @@
 {% import "macros.html" as hx %}
 {% block content %}
 {{ ui.heading("History", "", "clock-history") }}
-<p class="tool-meta"><i class="bi bi-git"></i> {{ page.ref_kind }} <code>{{ page.ref_name }}</code>{% if page.path %} · <code>{{ page.path }}</code>{% endif %}{% if page.count is not none %} · {{ page.count }} commits{% endif %} · <a href="{{ page.files_href }}">Browse files</a></p>
+<div class="tool-meta d-flex flex-wrap align-items-center gap-2 mb-2">{% if page.picker %}{{ hx.picker(page.picker) }}{% else %}<span><i class="bi bi-git"></i> {{ page.ref_kind }} <code>{{ page.ref_name }}</code></span>{% endif %}<span>{% if page.path %}<code>{{ page.path }}</code> · {% endif %}{% if page.count is not none %}{{ page.count }} commits · {% endif %}<a href="{{ page.files_href }}">Browse files</a></span></div>
 {% if page.search_action %}{{ ui.search(page.search_action, page.search, "Words in commit messages") }}{% endif %}
 {% if page.clear_href %}<div class="small mb-2">Showing commits matching “{{ page.search }}”. <a href="{{ page.clear_href }}">Show the whole history</a></div>{% endif %}
 {% if page.no_commits %}{{ ui.empty("No commits yet.") }}{% else %}

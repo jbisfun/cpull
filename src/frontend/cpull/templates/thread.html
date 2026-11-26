@@ -25,11 +25,14 @@
   <span class="ms-auto d-flex gap-2">
     {% if page.close_action %}<form method="post" action="{{ page.close_action }}"><button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-check-circle"></i> Close {{ page.noun }}</button></form>{% endif %}
     {% if page.open_action %}<form method="post" action="{{ page.open_action }}"><button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-record-circle"></i> Reopen {{ page.noun }}</button></form>{% endif %}
+    {% if page.merge_href %}<a class="btn btn-sm btn-primary" href="{{ page.merge_href }}"><i class="bi bi-sign-merge-left"></i> Merge</a>{% endif %}
+    {% if page.publish_href %}<a class="btn btn-sm btn-primary" href="{{ page.publish_href }}"><i class="bi bi-send"></i> Publish</a>{% endif %}
+    {% if page.resolve_href %}<a class="btn btn-sm btn-primary" href="{{ page.resolve_href }}"><i class="bi bi-sign-intersection-y"></i> Resolve conflicts</a>{% endif %}
     {% if page.edit_href %}<a class="btn btn-sm btn-outline-secondary" href="{{ page.edit_href }}"><i class="bi bi-pencil"></i> Edit</a>{% endif %}
     {% if page.remove_href %}<a class="btn btn-sm btn-outline-danger" href="{{ page.remove_href }}"><i class="bi bi-trash"></i> Remove</a>{% endif %}
   </span>
 </div>
-{% if page.conflict %}<div class="alert alert-secondary py-2">This {{ page.noun }} has a metadata conflict; resolve it in cpull's terminal UI.</div>{% endif %}
+{% if page.conflict %}<div class="alert alert-secondary py-2">This {{ page.noun }} has a metadata conflict: two edits were made at once. {% if page.resolve_href %}<a href="{{ page.resolve_href }}">Resolve it</a> to edit or close it again.{% else %}Someone who can edit it has to resolve it.{% endif %}</div>{% endif %}
 <div class="row">
   <div class="col-xl-9">
     {% if page.facts %}
@@ -74,9 +77,19 @@
     {% endif %}
     <div class="tool-side-title">Attachments</div>
     <ul class="list-unstyled">
-      {% for a in page.attachments %}<li><i class="bi bi-paperclip"></i> <a href="{{ a.href }}">{{ a.name }}</a>{% if a.remove_href %} <a class="text-danger" href="{{ a.remove_href }}" title="Remove"><i class="bi bi-x"></i></a>{% endif %}</li>
+      {% for a in page.attachments %}<li class="cpull-attachment">
+        {% if a.image %}<a href="{{ a.href }}"><img class="cpull-attachment-thumb" src="{{ a.href }}" alt="{{ a.name }}" loading="lazy"></a>{% endif %}
+        <div class="d-flex align-items-center gap-1"><i class="bi bi-paperclip"></i> <a class="text-truncate" href="{{ a.href }}" title="Open {{ a.name }}">{{ a.name }}</a>
+        <a class="ms-auto text-body-secondary" href="{{ a.href }}" download="{{ a.name }}" title="Download"><i class="bi bi-download"></i></a>{% if a.remove_href %}<a class="text-danger" href="{{ a.remove_href }}" title="Remove"><i class="bi bi-x"></i></a>{% endif %}</div>
+      </li>
       {% else %}<li class="text-body-secondary">Nothing attached.</li>{% endfor %}
     </ul>
+    {% if page.attach_action %}
+    <form method="post" action="{{ page.attach_action }}" enctype="multipart/form-data" class="mb-3">
+      <input class="form-control form-control-sm mb-1" type="file" name="file" required aria-label="File to attach">
+      <div class="d-flex align-items-center gap-2"><button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-paperclip"></i> Attach</button><span class="form-text m-0">Up to 10 MB.</span></div>
+    </form>
+    {% endif %}
   </aside>
 </div>
 {% endblock %}

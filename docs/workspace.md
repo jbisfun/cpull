@@ -95,4 +95,6 @@ Stacks
 
 * cpull doesn't write the pullfile. After merging, the web UI runs `pull cpull pin ID`. This writes the pins into the pullfile and commits it the way pull always commits, signed and through its hooks, so `pull` must be on the PATH of the cpull process.
 
+* A single open patch merges the same way from its page in the web UI (its Merge button): the target branch moves to include the source (a fast-forward when it can), the patch is recorded as merged, and the page reports what happened. Nothing is pinned, since no stack is involved.
+
 * Pushing the events repo to a cpull server carries the stacks along. The server checks each stack event the same way on push, but it doesn't show stacks.

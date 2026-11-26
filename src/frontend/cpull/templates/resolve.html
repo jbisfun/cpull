@@ -1,0 +1,52 @@
+{% extends "theme/layout.html" %}
+{% import "theme/macros.html" as ui %}
+{#- One side of a conflict: {label, text, use_href, picked}. -#}
+{% macro version(v) -%}
+<div class="col-md-6">
+  <div class="card cpull-version{% if v.picked %} cpull-version-picked{% endif %} h-100">
+    <div class="card-header d-flex align-items-center gap-2 small">
+      <span class="fw-semibold">{{ v.label }}</span>
+      {% if v.picked %}<span class="ms-auto badge text-bg-primary">Used</span>{% else %}<a class="ms-auto btn btn-sm btn-outline-secondary py-0" href="{{ v.use_href }}">Use this</a>{% endif %}
+    </div>
+    <pre class="card-body mb-0 cpull-version-text">{% if v.text %}{{ v.text }}{% else %}<span class="text-body-secondary">(removed)</span>{% endif %}</pre>
+  </div>
+</div>
+{%- endmacro %}
+{% block tasks_before %}{{ ui.back(page.back, "Back to the " ~ page.noun) }}{% endblock %}
+{% block content %}
+{{ ui.heading("Resolve conflicts", "conflict") }}
+<p class="tool-meta">Two edits of <a href="{{ page.back }}">{{ page.title }}</a> were made at once, and they disagree. Pick a version of each field, or write your own; saving settles every conflict.</p>
+<form method="post" action="{{ page.action }}">
+  {% for f in page.fields %}
+  <section class="mb-4 cpull-conflict">
+    <div class="fw-semibold mb-2">{{ f.title }}</div>
+    <div class="row g-2 mb-2">{{ version(f.ours) }}{{ version(f.theirs) }}</div>
+    {% if f.atomic %}
+    <div class="small text-body-secondary">Resolution: <code>{{ f.value }}</code> (one side or the other)</div>
+    {% else %}
+    <label class="form-label small" for="f-{{ f.name }}">Resolution</label>
+    <input class="form-control form-control-sm" id="f-{{ f.name }}" name="{{ f.name }}" value="{{ f.value }}" autocomplete="off" spellcheck="false">
+    {% endif %}
+  </section>
+  {% endfor %}
+  {% if page.chunks %}
+  <section class="mb-4 cpull-conflict">
+    <div class="fw-semibold mb-2">Description</div>
+    {% for ch in page.chunks %}
+    {% if ch.kind == "same" %}<pre class="cpull-chunk">{{ ch.text }}</pre>
+    {% elif ch.kind == "auto" %}<div class="cpull-chunk cpull-chunk-auto"><div class="small text-body-secondary">{{ ch.label }}</div><pre class="mb-0">{% if ch.text %}{{ ch.text }}{% else %}(removed){% endif %}</pre></div>
+    {% else %}
+    <div class="cpull-hunk my-3">
+      <div class="row g-2 mb-2">{{ version(ch.ours) }}{{ version(ch.theirs) }}</div>
+      <label class="form-label small" for="f-{{ ch.name }}">Resolution</label>
+      <textarea class="form-control form-control-sm font-monospace" id="f-{{ ch.name }}" name="{{ ch.name }}" rows="4">
+{{ ch.value }}</textarea>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </section>
+  {% endif %}
+  {% if page.can_submit %}<button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check2-circle"></i> Save the resolution</button>{% endif %}
+  <a class="btn btn-outline-secondary btn-sm ms-1" href="{{ page.back }}">Cancel</a>
+</form>
+{% endblock %}

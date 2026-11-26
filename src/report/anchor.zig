@@ -59,6 +59,28 @@ pub fn fileAnchors(
     arena: *std.heap.ArenaAllocator,
     dir: []const u8,
 ) ![]const FileAnchor {
+    return anchorsIn(repo_kind, repo_opts, repo, io, arena, dir);
+}
+
+// the open anchored issues on every file, for a diff's markers
+pub fn allAnchors(
+    comptime repo_kind: rp.RepoKind,
+    comptime repo_opts: rp.RepoOpts(repo_kind),
+    repo: *rp.Repo(repo_kind, repo_opts),
+    io: std.Io,
+    arena: *std.heap.ArenaAllocator,
+) ![]const FileAnchor {
+    return anchorsIn(repo_kind, repo_opts, repo, io, arena, null);
+}
+
+fn anchorsIn(
+    comptime repo_kind: rp.RepoKind,
+    comptime repo_opts: rp.RepoOpts(repo_kind),
+    repo: *rp.Repo(repo_kind, repo_opts),
+    io: std.Io,
+    arena: *std.heap.ArenaAllocator,
+    dir_maybe: ?[]const u8,
+) ![]const FileAnchor {
     const aa = arena.allocator();
     const gpa = arena.child_allocator;
     const DB = evt.EventDB(repo_opts.hash);
@@ -76,7 +98,7 @@ pub fn fileAnchors(
         const record = (try evt.readRecordSubset(evt.Issue, Subset, DB, repo_opts.hash, moment, arena, &id)) orelse continue;
         const anchor = record.event.anchor orelse continue;
         const parent = std.Io.Dir.path.dirnamePosix(anchor.file) orelse "";
-        if (!std.mem.eql(u8, parent, dir)) continue;
+        if (dir_maybe) |dir| if (!std.mem.eql(u8, parent, dir)) continue;
         try out.append(aa, .{
             .file = anchor.file,
             .line = anchor.line,
