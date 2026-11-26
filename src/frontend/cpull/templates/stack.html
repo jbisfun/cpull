@@ -19,14 +19,14 @@
   <tbody>
   {% for m in page.members %}
     <tr>
-      <td class="text-center">{{ ui.ball(m.ball, "", m.mergeable) }}</td>
+      <td class="text-center">{{ ui.ball(m.ball, "ball-lg", m.mergeable) }}</td>
       <td>{% if m.repo_href %}<a class="cpull-repo" href="{{ m.repo_href }}">{{ m.repo_avatar }}{{ m.repo }}</a>{% else %}<span class="cpull-repo">{{ m.repo_avatar }}{{ m.repo }}</span>{% endif %}</td>
       <td>{% if m.href %}<a class="fw-semibold" href="{{ m.href }}">{{ m.title }}</a>{% else %}{{ m.title }}{% endif %}</td>
       <td><code>{{ m.source_branch }} → {{ m.target_branch }}</code></td>
       <td>{{ m.status }}</td>
       <td>{{ m.mergeable|replace("_", " ") }}</td>
       <td>{% if m.target_oid %}<code>{{ m.target_oid }}</code>{% if m.pin_differs %} <span class="small text-body-secondary">(pinned <code>{{ m.pin }}</code>)</span>{% endif %}{% endif %}</td>
-      {% if page.ci %}<td class="text-center">{% if m.ci %}{{ ig.ci_ball(m.ci) }}{% endif %}</td>{% endif %}
+      {% if page.ci %}<td class="text-center">{% if m.ci %}{{ ig.ci_ball(m.ci) }}{% else %}<span class="tool-na">N/A</span>{% endif %}</td>{% endif %}
     </tr>
   {% endfor %}
   </tbody>

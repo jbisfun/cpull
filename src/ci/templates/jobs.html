@@ -23,7 +23,7 @@
   <tbody>
   {% for j in page.jobs %}
     <tr>
-      <td>{{ ci.ball(j.status, "fs-5") }}</td>
+      <td>{{ ci.ball(j.status, "ball-lg") }}</td>
       <td><a class="fw-semibold" href="/ci/jobs/{{ j.id }}">#{{ j.id }}</a></td>
       <td><a href="/ci/projects/{{ j.project }}">{{ j.project }}</a></td>
       <td>{{ j.command }}{% if j.configuration != "none" %} <span class="badge text-bg-secondary">{{ j.configuration }}</span>{% endif %}{% if j.strict %} <span class="badge text-bg-secondary">strict</span>{% endif %}</td>

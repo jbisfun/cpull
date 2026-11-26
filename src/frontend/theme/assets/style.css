@@ -158,6 +158,43 @@ code, kbd, pre, samp { font-family: var(--wiki-mono); }
 .dropdown-item.active { font-weight: 700; }
 .dropdown-item.active::before { content: "\2713"; position: absolute; left: 0.45rem; }
 
+/* Dark mode: graphite pro-app menus, opaque, with a dark rim, a top highlight and a deep
+   shadow. Keyed on <html> (the page's scheme): the global bar is always
+   data-bs-theme="dark", and its menus stay light in light mode. */
+html[data-bs-theme="dark"] .dropdown-menu {
+  --bs-dropdown-bg: #2e3034;
+  --bs-dropdown-color: #e4e5e7;
+  --bs-dropdown-border-color: #0c0d0e;
+  --bs-dropdown-link-color: #e4e5e7;
+  --bs-dropdown-link-active-color: #e4e5e7;
+  --bs-dropdown-header-color: #9ba0a8;
+  --bs-dropdown-divider-bg: #474a4f;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+.dropdown-menu .form-control { background-color: #fff; }
+html[data-bs-theme="dark"] .dropdown-menu .form-control { color: #e4e5e7; background-color: #232427; border-color: #5c6066; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35); }
+html[data-bs-theme="dark"] .dropdown-menu code { color: #f0a3c4; }
+/* Popovers and toasts: opaque sheets with the menus' shadow; toasts carry the selection blue as an accent. */
+.popover {
+  --bs-popover-bg: var(--wiki-sheet);
+  --bs-popover-border-color: var(--wiki-sheet-border);
+  --bs-popover-header-bg: var(--wiki-code-bg);
+  --bs-popover-body-color: var(--bs-body-color);
+  font-family: var(--wiki-font);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.toast {
+  --bs-toast-bg: var(--wiki-sheet);
+  --bs-toast-color: var(--bs-body-color);
+  --bs-toast-border-color: var(--wiki-sheet-border);
+  --bs-toast-header-bg: var(--wiki-code-bg);
+  border-left: 4px solid var(--wiki-select-bottom);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+html[data-bs-theme="dark"] .toast { --bs-toast-bg: #2e3034; --bs-toast-border-color: #0c0d0e; border-left-color: var(--wiki-select-top); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 24px rgba(0, 0, 0, 0.6); }
+/* Toasts sit under the header, clear of the sheet's footer. */
+.toast-container.tool-toasts { top: 2.6rem; }
+
 /* Repo sidebar: Finder/iTunes source list. */
 .wiki-sidebar {
   font-size: 0.8125rem;
@@ -395,27 +432,59 @@ a:hover { text-decoration: underline; }
 .wiki-sidebar a.active .bi { color: #fff; }
 .wiki-sidebar a.active { color: #fff !important; }
 .wiki-sidebar a.active * { color: inherit; }
-.wiki-sidebar a.active .ball { color: #fff; }
+.wiki-sidebar a.active .ball { box-shadow: inset 0 -0.08em 0.15em rgba(0, 0, 0, 0.3), 0 0 0 1.5px #fff; }
 .wiki-sidebar .tool-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.12rem 0; }
 .wiki-sidebar .tool-row > a:first-of-type { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wiki-sidebar .tool-muted { color: var(--wiki-source-head); font-size: 0.75rem; white-space: nowrap; }
 .wiki-sidebar li > a { display: flex; align-items: center; }
-.wiki-sidebar li > a .tool-ball { width: 1.2rem; text-align: center; margin-right: 0.35rem; font-size: 0.7rem; }
+/* a ball in an icon's 1.2rem + 0.35rem slot */
+.wiki-sidebar li > a .tool-ball { font-size: 0.75rem; margin-inline: 0.28rem 0.63rem; }
 .wiki-sidebar li > a .tool-count { margin-left: auto; }
 .wiki-content { max-width: none; }
 .row:has(> .wiki-sidebar) > .wiki-content { max-width: none !important; }
 .card:hover { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
 
-/* Status balls (Jenkins build balls in the wiki's colours). */
-.ball { color: #a0a4aa; }
-.ball-lg { font-size: 1.5rem; vertical-align: -.2rem; }
-.ball-passed, .ball-open, .ball-clean { color: var(--wiki-select-bottom); }
-.ball-merged { color: #7b52ab; }
-.ball-failed, .ball-conflict { color: #d12b2b; }
-.ball-ahead, .ball-warning { color: #e0a100; }
-.ball-closed, .ball-none { color: #a0a4aa; }
-.ball-running { color: var(--wiki-select-top); animation: tool-pulse .9s ease-in-out infinite alternate; }
-@keyframes tool-pulse { to { opacity: .25; } }
+/* Status balls: Jenkins' glossy build balls in the wiki's colours (blue = passed, as
+   Jenkins' classic palette). Drawn in CSS on the <i class="bi bi-circle-fill ball">
+   markup (the glyph is hidden) so they get a highlight and a rim, and sized in em so
+   they sit on the text of their row; .ball-lg is the tables' status column. Running
+   is the blue ball with moving stripes, pulsing, like Jenkins' animated balls. */
+:root, [data-bs-theme="light"] {
+  --ball-blue: #2c6fc7; --ball-red: #d12b2b; --ball-amber: #e0a100; --ball-purple: #7b52ab; --ball-grey: #a0a4aa;
+  --ball-rim: rgba(0, 0, 0, 0.3);
+}
+[data-bs-theme="dark"] {
+  --ball-blue: #4f97f2; --ball-red: #f04b4b; --ball-amber: #f0b429; --ball-purple: #a57fe0; --ball-grey: #858a92;
+  --ball-rim: rgba(255, 255, 255, 0.22);
+}
+.ball {
+  --ball: var(--ball-grey);
+  display: inline-block; flex: none; width: 0.85em; height: 0.85em; border-radius: 50%; vertical-align: -0.08em;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 50%) no-repeat, var(--ball);
+  box-shadow: inset 0 -0.08em 0.15em rgba(0, 0, 0, 0.3), 0 0 0 1px var(--ball-rim);
+}
+.ball.bi::before { content: none; }
+.ball-lg { font-size: 1.1rem; vertical-align: -0.15em; }
+.tool-heading .ball-lg { font-size: 1em; width: 0.7em; height: 0.7em; vertical-align: baseline; }
+.ball-passed, .ball-open, .ball-clean { --ball: var(--ball-blue); }
+.ball-merged { --ball: var(--ball-purple); }
+.ball-failed, .ball-conflict, .ball-timeout { --ball: var(--ball-red); }
+.ball-ahead, .ball-warning, .ball-unstable { --ball: var(--ball-amber); }
+.ball-closed, .ball-none, .ball-cancelled, .ball-queued { --ball: var(--ball-grey); }
+/* "none" (not cloned, no CI job yet) is an empty ring, apart from the solid grey of unpinned/aborted. */
+.ball-none { background: transparent; box-shadow: inset 0 0 0 0.12em var(--ball-grey); }
+.ball-running {
+  --ball: var(--ball-blue);
+  --ball-stripe: color-mix(in srgb, var(--ball) 30%, #fff);
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 50%) no-repeat,
+    linear-gradient(-45deg, var(--ball) 25%, var(--ball-stripe) 25% 50%, var(--ball) 50% 75%, var(--ball-stripe) 75%);
+  background-size: 100% 100%, 0.45em 0.45em;
+  animation: ball-stripes 0.8s linear infinite, tool-pulse 0.9s ease-in-out infinite alternate;
+}
+.ball-queued { animation: tool-pulse 0.9s ease-in-out infinite alternate; }
+@keyframes ball-stripes { to { background-position: 0 0, 0.45em 0; } }
+@keyframes tool-pulse { to { opacity: 0.6; } }
 
 /* Code wells and console output on the sheet. */
 .console {
@@ -437,8 +506,12 @@ a:hover { text-decoration: underline; }
 [data-bs-theme="dark"] .wiki-content .form-control, [data-bs-theme="dark"] .wiki-content .form-select {
   background-color: #232427; border-color: #5c6066; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
 }
-[data-bs-theme="dark"] .wiki-content .form-control:focus { border-color: var(--wiki-select-top); }
-[data-bs-theme="dark"] .wiki-content .input-group-text { background: linear-gradient(#55585d, #45484c); border-color: #5c6066; color: #ddd; }
+[data-bs-theme="dark"] .wiki-content .form-control:focus, [data-bs-theme="dark"] .wiki-content .form-select:focus {
+  border-color: var(--wiki-select-top); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 0.2rem rgba(93, 140, 200, 0.35);
+}
+/* Input addons ("Line") are flat labels on the field, not buttons. */
+.wiki-content .input-group-text { background: var(--wiki-code-bg); color: var(--bs-secondary-color); }
+[data-bs-theme="dark"] .wiki-content .input-group-text { background: #2b2d30; border-color: #5c6066; color: #b9bdc3; }
 .btn-primary {
   --bs-btn-border-color: var(--wiki-select-border);
   --bs-btn-hover-border-color: var(--wiki-select-border);
@@ -506,3 +579,39 @@ a:hover { text-decoration: underline; }
 .wiki-sidebar a.active .cpull-identicon { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6); }
 .tool-crumbs .cpull-identicon { width: 0.9rem; height: 0.9rem; margin-right: 0.3rem; vertical-align: -0.15em; }
 .cpull-repo { display: inline-flex; align-items: center; gap: 0.45rem; }
+
+/* ---- Polish: shared pieces every tool page uses ------------------------- */
+/* Toasts clear the two-strip header (global bar + crumbs). */
+.toast-container.tool-toasts { top: 4.4rem; }
+/* Column headers stay on one line; a table that is too wide scrolls in its .table-responsive. */
+.wiki-content .table thead th { white-space: nowrap; vertical-align: middle; }
+/* "N/A" and other empty cells: one muted style. */
+.tool-na { color: var(--bs-secondary-color); }
+/* Code and logs never spill out of their well: wide lines scroll sideways. */
+.wiki-content pre, .console { overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--bs-secondary-color) transparent; }
+.wiki-content pre > code { white-space: pre; }
+/* Warning badges ("off branch", "dirty"): a toned amber pill instead of Bootstrap's signal yellow. */
+.badge.text-bg-warning { color: #694800 !important; background: linear-gradient(#ffeaa8, #f6d064) !important; border: 1px solid #d6a52a; font-weight: 600; }
+html[data-bs-theme="dark"] .badge.text-bg-warning { color: #f3c96b !important; background: rgba(240, 180, 41, 0.14) !important; border-color: rgba(240, 180, 41, 0.45); }
+/* Light badges (targets, chips) would be white blocks on the dark sheet. */
+html[data-bs-theme="dark"] .badge.text-bg-light { color: #dcdde0 !important; background: #2b2d30 !important; border-color: #4f5257 !important; }
+/* Status pills (a job's passed/failed/running), coloured like the balls. */
+.tool-status { display: inline-block; padding: 0.1rem 0.55rem; border-radius: 1rem; font-size: 0.75rem; font-weight: 600; line-height: 1.4; color: #fff;
+  background: var(--ball-grey); text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+.tool-status-passed, .tool-status-running { background: var(--ball-blue); }
+.tool-status-failed, .tool-status-timeout { background: var(--ball-red); }
+html[data-bs-theme="dark"] .tool-status { color: #111; text-shadow: none; }
+/* Focus rings: the selection blue everywhere, in both schemes. */
+.form-control:focus, .form-select:focus { border-color: var(--wiki-select-top); box-shadow: 0 0 0 0.2rem rgba(60, 120, 200, 0.28); }
+.form-check-input:focus, .btn:focus-visible { box-shadow: 0 0 0 0.2rem rgba(60, 120, 200, 0.35); }
+/* File inputs: the picker button is one of the theme's push buttons. */
+.form-control::file-selector-button { color: #222; background: linear-gradient(#fff, #dcdcdc); border-color: #8e9196; }
+html[data-bs-theme="dark"] .form-control::file-selector-button { color: #e8e9eb; background: linear-gradient(#5f6268, #46494e); border-color: #1a1b1d; }
+/* Rows of mono chips (hashes, work trees): each chip stays whole, the row wraps between them. */
+.tool-chips { display: inline-flex; flex-wrap: wrap; gap: 0.25rem 0.35rem; vertical-align: top; }
+.tool-chips code, code.tool-chip { white-space: nowrap; }
+/* A heading's trailing pill and action button sit on its baseline row. */
+.wiki-content h1.tool-heading .tool-status { font-family: var(--wiki-font); }
+.wiki-content h1.tool-heading .btn { font-weight: normal; }
+/* Row-action icon buttons are bare glyphs: no push-button highlight line (CI pages too). */
+.wiki-content .btn-link { box-shadow: none; text-shadow: none; }

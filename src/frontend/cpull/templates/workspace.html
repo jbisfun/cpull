@@ -27,14 +27,14 @@
   {% for r in page.repos %}
     <tr>
       <td class="text-center">{{ ui.ball(r.ball, "ball-lg", r.state) }}</td>
-      {% if page.has_ci %}<td class="text-center">{% if r.ci %}{{ ig.ci_ball(r.ci, "ball-lg") }}{% else %}<span class="text-body-secondary small" title="No idl project, or no CI job yet">N/A</span>{% endif %}</td>{% endif %}
+      {% if page.has_ci %}<td class="text-center">{% if r.ci %}{{ ig.ci_ball(r.ci, "ball-lg") }}{% else %}<span class="tool-na" title="No idl project, or no CI job yet">N/A</span>{% endif %}</td>{% endif %}
       <td><div class="d-flex align-items-center gap-2">{{ r.avatar }}<div><a class="fw-semibold" href="{{ r.href }}">{{ r.name }}</a>
-        <div class="small text-body-secondary">{% if r.cloned %}<i class="bi bi-git"></i> {{ r.head_branch }}@{{ r.head }}{% if r.off_branch %} <span class="badge text-bg-warning">off branch</span>{% endif %}{% else %}not cloned{% endif %}</div></div></div></td>
+        <div class="small text-body-secondary">{% if r.cloned %}<i class="bi bi-git"></i> {{ r.head_branch }}@{{ r.head }}{% if r.off_branch %} <span class="badge text-bg-warning ms-1">off branch</span>{% endif %}{% else %}not cloned{% endif %}</div></div></div></td>
       <td>{{ r.branch }}</td>
-      <td>{% if r.pin %}{{ r.pin }}{% else %}N/A{% endif %}</td>
+      <td>{% if r.pin %}{{ r.pin }}{% else %}<span class="tool-na">N/A</span>{% endif %}</td>
       <td>{{ r.state }}</td>
-      <td>{% if r.issues %}<a href="{{ r.issues_href }}">{{ r.issues }}</a>{% else %}N/A{% endif %}</td>
-      <td>{% if r.patches %}<a href="{{ r.patches_href }}">{{ r.patches }}</a>{% else %}N/A{% endif %}</td>
+      <td>{% if r.issues %}<a href="{{ r.issues_href }}">{{ r.issues }}</a>{% elif r.cloned %}<span class="tool-na">0</span>{% else %}<span class="tool-na">N/A</span>{% endif %}</td>
+      <td>{% if r.patches %}<a href="{{ r.patches_href }}">{{ r.patches }}</a>{% elif r.cloned %}<span class="tool-na">0</span>{% else %}<span class="tool-na">N/A</span>{% endif %}</td>
       <td class="text-end text-nowrap">
         {% if r.cloned %}<a class="btn btn-sm btn-link p-0 me-2 fs-5" href="{{ r.files_href }}" title="Browse files"><i class="bi bi-folder2-open"></i></a><a class="btn btn-sm btn-link p-0 fs-5" href="{{ r.commits_href }}" title="History"><i class="bi bi-clock-history"></i></a>{% endif %}
       </td>
@@ -51,7 +51,7 @@
   {% for s in page.stacks %}
     <tr>
       <td class="text-center">{{ ui.ball(s.ball, "ball-lg") }}</td>
-      {% if page.has_ci %}<td class="text-center">{% if s.ci %}{{ ig.ci_ball(s.ci, "ball-lg") }}{% endif %}</td>{% endif %}
+      {% if page.has_ci %}<td class="text-center">{% if s.ci %}{{ ig.ci_ball(s.ci, "ball-lg") }}{% else %}<span class="tool-na">N/A</span>{% endif %}</td>{% endif %}
       <td><a class="fw-semibold" href="{{ s.href }}">{{ s.title }}</a>{% if s.conflicted %}<div class="small text-danger">conflicted: {{ s.conflicted }}</div>{% endif %}</td>
       <td>{{ s.members }}</td>
       <td>{{ s.status }}</td>
@@ -67,11 +67,11 @@
   <tbody>
   {% for r in page.list %}
     <tr>
-      <td class="text-center">{{ ui.ball(r.ball, "", r.status or "open") }}</td>
+      <td class="text-center">{{ ui.ball(r.ball, "ball-lg", r.status or "open") }}</td>
       <td>{% if r.first_of_repo %}<a class="cpull-repo" href="{{ r.repo_href }}">{{ r.repo_avatar }}{{ r.repo }}</a>{% endif %}</td>
       <td><a class="fw-semibold" href="{{ r.href }}">{{ r.title }}</a></td>
       <td>{% if page.view == "issues" %}{% for l in r.labels %}<span class="badge rounded-pill text-bg-secondary cpull-label">{{ l }}</span> {% endfor %}{% else %}<code>{{ r.detail }}</code>{% endif %}</td>
-      {% if page.has_ci and page.view == "patches" %}<td class="text-center">{% if r.ci %}{{ ig.ci_ball(r.ci) }}{% endif %}</td>{% endif %}
+      {% if page.has_ci and page.view == "patches" %}<td class="text-center">{% if r.ci %}{{ ig.ci_ball(r.ci) }}{% else %}<span class="tool-na">N/A</span>{% endif %}</td>{% endif %}
     </tr>
   {% else %}
     <tr><td colspan="4" class="text-body-secondary">No open {{ page.view }} in any repo.</td></tr>

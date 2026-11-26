@@ -6,7 +6,7 @@
   <div class="card cpull-version{% if v.picked %} cpull-version-picked{% endif %} h-100">
     <div class="card-header d-flex align-items-center gap-2 small">
       <span class="fw-semibold">{{ v.label }}</span>
-      {% if v.picked %}<span class="ms-auto badge text-bg-primary">Used</span>{% else %}<a class="ms-auto btn btn-sm btn-outline-secondary py-0" href="{{ v.use_href }}">Use this</a>{% endif %}
+      {% if v.picked %}<span class="ms-auto cpull-used"><i class="bi bi-check2"></i> Used</span>{% else %}<a class="ms-auto btn btn-sm btn-outline-secondary" href="{{ v.use_href }}"><i class="bi bi-arrow-down-square"></i> Use this</a>{% endif %}
     </div>
     <pre class="card-body mb-0 cpull-version-text">{% if v.text %}{{ v.text }}{% else %}<span class="text-body-secondary">(removed)</span>{% endif %}</pre>
   </div>
@@ -14,7 +14,7 @@
 {%- endmacro %}
 {% block tasks_before %}{{ ui.back(page.back, "Back to the " ~ page.noun) }}{% endblock %}
 {% block content %}
-{{ ui.heading("Resolve conflicts", "conflict") }}
+{{ ui.heading("Resolve conflicts", "", "sign-intersection-y") }}
 <p class="tool-meta">Two edits of <a href="{{ page.back }}">{{ page.title }}</a> were made at once, and they disagree. Pick a version of each field, or write your own; saving settles every conflict.</p>
 <form method="post" action="{{ page.action }}">
   {% for f in page.fields %}

@@ -12,9 +12,9 @@
 {% block sidepanels %}{{ ci.history(page.builds, page.history_href) }}{% endblock %}
 {% block content %}
 {% set project = page.project %}
-<h1 class="h3 d-flex align-items-center gap-2">
+<h1 class="tool-heading">
   {{ ci.ball(project.ball, "ball-lg") }}
-  Project {{ project.name }} {{ ci.weather(project.health, project.weather) }}
+  <span>Project {{ project.name }}</span> {{ ci.weather(project.health, project.weather) }}
 </h1>
 <p class="text-body-secondary mb-3">
   <code>{{ project.path }}</code> · <i class="bi bi-git"></i> {{ project.repo or "no repo" }}

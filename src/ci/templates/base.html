@@ -35,8 +35,8 @@
 {% endblock %}
 {% endblock %}
 {% block scripts %}
-<div class="toast-container position-fixed bottom-0 end-0 p-3">
-  <div id="toast" class="toast align-items-center border-0" role="status"><div class="d-flex"><div class="toast-body"></div>
+<div class="toast-container position-fixed end-0 p-3 tool-toasts">
+  <div id="toast" class="toast align-items-center" role="status"><div class="d-flex"><div class="toast-body"></div>
     <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div></div>
 </div>
 <script>
@@ -48,7 +48,7 @@ async function api(method, url, body) {
 }
 function toast(msg, error) {
   const t = document.getElementById('toast');
-  t.className = `toast align-items-center border-0 text-bg-${error ? 'danger' : 'dark'}`;
+  t.className = `toast align-items-center${error ? ' text-bg-danger border-0' : ''}`;
   t.querySelector('.toast-body').textContent = msg;
   bootstrap.Toast.getOrCreateInstance(t).show();
 }

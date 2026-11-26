@@ -102,10 +102,11 @@ fn tabLabel(data: *const Repo, tab: Tab) []const u8 {
     };
 }
 
-fn tabIcon(tab: Tab) []const u8 {
+fn tabIcon(data: *const Repo, tab: Tab) []const u8 {
     return switch (tab) {
         .files => "folder2-open",
-        .changes => "clock-history",
+        // a diff gets the diff page's own icon, as a fork's Diff tab does
+        .changes => if (data.changes == .diff) "file-earmark-diff" else "clock-history",
         .refs => "signpost-split",
         .discussions => "chat-left-text",
         .issues => "record-circle",
@@ -134,7 +135,7 @@ pub fn chrome(c: Ctx, data: anytype, title: []const u8, extra: []const theme.Lin
     var tasks: std.ArrayList(theme.Link) = .empty;
     for (std.enums.values(Tab)) |tab| {
         if (!shown(data, tab)) continue;
-        try tasks.append(aa, .{ .label = tabLabel(data, tab), .href = try tabHref(c, data, tab), .icon = tabIcon(tab), .active = tab == current, .count = openCount(data, tab) });
+        try tasks.append(aa, .{ .label = tabLabel(data, tab), .href = try tabHref(c, data, tab), .icon = tabIcon(data, tab), .active = tab == current, .count = openCount(data, tab) });
     }
     const id = identity(data);
     if (data.repo.event.issue_role != null and data.issues.viewer != null) try tasks.append(aa, .{ .label = "New issue", .href = try c.routeUrl(RoutablePage.repoThreadNewRoute(.issue, id)), .icon = "plus-square" });

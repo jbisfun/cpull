@@ -81,16 +81,19 @@
     <div class="tool-side-title">Attachments</div>
     <ul class="list-unstyled">
       {% for a in page.attachments %}<li class="cpull-attachment">
-        {% if a.image %}<a href="{{ a.href }}"><img class="cpull-attachment-thumb" src="{{ a.href }}" alt="{{ a.name }}" loading="lazy"></a>{% endif %}
-        <div class="d-flex align-items-center gap-1"><i class="bi bi-paperclip"></i> <a class="text-truncate" href="{{ a.href }}" title="Open {{ a.name }}">{{ a.name }}</a>
-        <a class="ms-auto text-body-secondary" href="{{ a.href }}" download="{{ a.name }}" title="Download"><i class="bi bi-download"></i></a>{% if a.remove_href %}<a class="text-danger" href="{{ a.remove_href }}" title="Remove"><i class="bi bi-x"></i></a>{% endif %}</div>
+        {% if a.image %}<a class="cpull-attachment-thumb" href="{{ a.href }}" title="Open {{ a.name }}"><img src="{{ a.href }}" alt="{{ a.name }}" loading="lazy"></a>{% endif %}
+        <div class="cpull-attachment-name"><i class="bi bi-{% if a.image %}file-earmark-image{% else %}paperclip{% endif %}"></i><a class="text-truncate" href="{{ a.href }}" title="Open {{ a.name }}">{{ a.name }}</a>
+        <a class="cpull-attachment-action ms-auto" href="{{ a.href }}" download="{{ a.name }}" title="Download {{ a.name }}"><i class="bi bi-download"></i></a>{% if a.remove_href %}<a class="cpull-attachment-action cpull-attachment-remove" href="{{ a.remove_href }}" title="Remove {{ a.name }}"><i class="bi bi-trash"></i></a>{% endif %}</div>
       </li>
       {% else %}<li class="text-body-secondary">Nothing attached.</li>{% endfor %}
     </ul>
     {% if page.attach_action %}
     <form method="post" action="{{ page.attach_action }}" enctype="multipart/form-data" class="mb-3">
-      <input class="form-control form-control-sm mb-1" type="file" name="file" required aria-label="File to attach">
-      <div class="d-flex align-items-center gap-2"><button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-paperclip"></i> Attach</button><span class="form-text m-0">Up to 10 MB.</span></div>
+      <div class="input-group input-group-sm">
+        <input class="form-control" type="file" name="file" required aria-label="File to attach">
+        <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-paperclip"></i> Attach</button>
+      </div>
+      <div class="form-text mt-1">Up to 10 MB.</div>
     </form>
     {% endif %}
   </aside>

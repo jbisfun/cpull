@@ -12,10 +12,10 @@
   {% for r in page.rows %}
   <tr class="{% if r.undone %}text-body-secondary cpull-undone{% endif %}{% if r.selected %} table-active{% endif %}" id="undo-{{ r.index }}">
     <td><a href="{{ r.href }}">{{ r.index }}</a></td>
-    <td><code>{{ r.action }}</code>{% if r.undone %} <span class="badge text-bg-secondary">undone</span>{% endif %}</td>
-    <td>{% if r.details %}{% for d in r.details %}<div><span class="text-body-secondary small">{{ d.label }}</span> {% if d.href %}<a href="{{ d.href }}">{{ d.text }}</a>{% else %}{{ d.text }}{% endif %}</div>{% endfor %}{% else %}<span class="cpull-undo-text">{{ r.description }}</span>{% endif %}</td>
+    <td class="text-nowrap"><code>{{ r.action }}</code>{% if r.undone %} <span class="cpull-undone-pill">undone</span>{% endif %}</td>
+    <td>{% if r.details %}<div class="cpull-undo-details">{% for d in r.details %}<span><span class="text-body-secondary small">{{ d.label }}</span> {% if d.href %}<a href="{{ d.href }}">{{ d.text }}</a>{% else %}{{ d.text }}{% endif %}</span>{% endfor %}</div>{% else %}<span class="cpull-undo-text">{{ r.description }}</span>{% endif %}</td>
     <td class="text-nowrap small">{{ ui.time(r.time) }}</td>
-    <td class="text-end text-nowrap">{% if r.form %}<form method="post" action="{{ r.form }}"><button class="btn btn-sm btn-outline-secondary py-0" type="submit" title="{{ r.label }}"><i class="bi bi-arrow-counterclockwise"></i> Undo</button></form>{% elif r.index == 0 %}<span class="small text-body-secondary">{{ r.label }}</span>{% endif %}</td>
+    <td class="text-end text-nowrap">{% if r.form %}<form method="post" action="{{ r.form }}"><button class="btn btn-sm btn-outline-secondary" type="submit" title="{{ r.label }}"><i class="bi bi-arrow-counterclockwise"></i> Undo</button></form>{% elif r.index == 0 %}<span class="small text-body-secondary">{{ r.label }}</span>{% endif %}</td>
   </tr>
   {% else %}
   <tr><td colspan="5" class="text-body-secondary">No history yet.</td></tr>

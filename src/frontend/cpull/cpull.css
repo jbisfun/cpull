@@ -16,7 +16,7 @@
 .cpull-files .cpull-dir { color: var(--wiki-select-top); }
 
 /* Source and diff tables: a code well with a line-number gutter. */
-.cpull-code { overflow-x: auto; background: var(--wiki-code-bg); border: 1px solid var(--wiki-code-border); border-radius: 4px; }
+.cpull-code { overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--bs-secondary-color) transparent; background: var(--wiki-code-bg); border: 1px solid var(--wiki-code-border); border-radius: 4px; }
 .card > .cpull-code { border-width: 1px 0 0; border-radius: 0; }
 .cpull-code table { border-collapse: collapse; width: 100%; font-family: var(--wiki-mono); font-size: 0.75rem; line-height: 1.45; }
 .cpull-code td { padding: 0 0.6rem; vertical-align: top; }
@@ -43,13 +43,16 @@
 .cpull-prose .cpull-pre { white-space: pre-wrap; font-family: var(--wiki-mono); font-size: 0.8rem; }
 .cpull-prose img { max-width: 100%; }
 
-/* Row-action icon buttons are bare glyphs: no push-button highlight line. */
-.wiki-content .btn-link { box-shadow: none; text-shadow: none; }
 
 /* cpull reports (line-anchored issues): the issue page's excerpt and the files view's flags */
-.cpull-code tr.cpull-hit, .cpull-code tr.cpull-flagged { background: rgba(255, 193, 7, 0.18); }
-.cpull-code tr.cpull-hit .cpull-num, .cpull-code tr.cpull-flagged .cpull-num { color: var(--bs-body-color); font-weight: 600; }
+/* A flagged line: a clear highlighter-yellow row (it replaces a diff row's green/red tint
+   rather than mixing into it) with an amber bar down the gutter. */
+.cpull-code tr.cpull-hit, .cpull-code tr.cpull-flagged { background: #fff1b8; }
+[data-bs-theme="dark"] .cpull-code tr.cpull-hit, [data-bs-theme="dark"] .cpull-code tr.cpull-flagged { background: #4d4111; }
+.cpull-code tr.cpull-hit .cpull-num, .cpull-code tr.cpull-flagged .cpull-num { color: var(--bs-body-color); font-weight: 600; box-shadow: inset 3px 0 0 #e0a100; }
+[data-bs-theme="dark"] .cpull-code tr.cpull-hit .cpull-num, [data-bs-theme="dark"] .cpull-code tr.cpull-flagged .cpull-num { box-shadow: inset 3px 0 0 #f0b429; }
 .cpull-flag-icon, .cpull-flag-color { color: #d08700; }
+[data-bs-theme="dark"] .cpull-flag-icon, [data-bs-theme="dark"] .cpull-flag-color { color: #f0b429; }
 .cpull-flag-icon { margin-right: 0.3rem; }
 .cpull-report .card-footer code.cpull-quote { white-space: pre-wrap; }
 .cpull-report-list { margin-top: 0.35rem; }
@@ -58,22 +61,40 @@
 .cpull-picker .btn code { color: inherit; }
 .cpull-picker-menu { max-height: 24rem; overflow-y: auto; font-size: 0.85rem; }
 
-/* Attachments in a thread's side column: image thumbnails over their names. */
-.cpull-attachment { margin-bottom: 0.4rem; }
-.cpull-attachment-thumb { display: block; max-width: 100%; max-height: 8rem; border: 1px solid var(--bs-border-color); border-radius: 4px; margin-bottom: 0.15rem; }
+/* Attachments in a thread's side column: small framed tiles, an image's fixed-size
+   thumbnail (on a checkerboard, for transparency) over a caption row with the name
+   and the download/remove actions. */
+.cpull-attachment { margin-bottom: 0.5rem; border: 1px solid var(--bs-border-color); border-radius: 4px; background: var(--wiki-sheet); overflow: hidden; }
+.cpull-attachment-thumb { display: flex; align-items: center; justify-content: center; height: 7.5rem; padding: 0.35rem; border-bottom: 1px solid var(--bs-border-color);
+  background: repeating-conic-gradient(var(--wiki-code-bg) 0 25%, var(--wiki-sheet) 0 50%) 0 0 / 16px 16px; }
+.cpull-attachment-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+.cpull-attachment-name { display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.4rem 0.3rem 0.55rem; background: var(--wiki-code-bg); }
+.cpull-attachment-name > .bi { color: var(--bs-secondary-color); font-size: 0.95rem; }
+.cpull-attachment-action { display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.6rem; border-radius: 4px; font-size: 1rem; color: var(--bs-link-color); text-decoration: none !important; }
+.cpull-attachment-action:hover { background: rgba(var(--bs-link-color-rgb), 0.14); }
+.cpull-attachment-remove { color: #c43030; }
+.cpull-attachment-remove:hover { background: rgba(196, 48, 48, 0.14); }
+[data-bs-theme="dark"] .cpull-attachment-remove { color: #ff8f86; }
 
 /* The "report this line" form: folded in the file header, or under a line. */
 .cpull-report-details > summary { cursor: pointer; width: fit-content; }
 .cpull-report-details[open] > summary { margin-bottom: 0.4rem; }
 .cpull-report-line { width: 8rem; }
 .cpull-report-title { flex: 1 1 16rem; }
-.cpull-code tr.cpull-report-row td { white-space: normal; font-family: var(--bs-body-font-family); font-size: 0.85rem; padding: 0.5rem 0.75rem; background: var(--bs-body-bg); border-top: 1px solid var(--wiki-code-border); border-bottom: 1px solid var(--wiki-code-border); }
+/* The form under a line: an inset panel in the code well, lined up with the code column. */
+.cpull-code tr.cpull-report-row td { white-space: normal; font-family: var(--bs-body-font-family); font-size: 0.85rem; padding: 0.75rem 1rem; background: var(--wiki-sheet);
+  border-top: 1px solid var(--wiki-code-border); border-bottom: 1px solid var(--wiki-code-border); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.12), inset 3px 0 0 #e0a100; }
+[data-bs-theme="dark"] .cpull-code tr.cpull-report-row td { box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35), inset 3px 0 0 #f0b429; }
 .cpull-code tr.cpull-selected { background: #fff6c8; }
 [data-bs-theme="dark"] .cpull-code tr.cpull-selected, [data-bs-theme="dark"] .cpull-code tr:target { background: rgba(255, 214, 10, 0.16); }
 
 /* Resolving a conflict: the two versions side by side, the picked one outlined. */
 .cpull-version-text { white-space: pre-wrap; font-family: var(--wiki-mono); font-size: 0.8rem; background: transparent; }
 .cpull-version-picked { border-color: var(--wiki-select-border); box-shadow: 0 0 0 1px var(--wiki-select-border); }
+.cpull-version > .card-header { min-height: 2.9rem; }
+[data-bs-theme="dark"] .cpull-version-picked { border-color: var(--wiki-select-top); box-shadow: 0 0 0 1px var(--wiki-select-top); }
+.cpull-used { font-size: 0.75rem; color: var(--bs-secondary-color); }
+.cpull-version-picked .cpull-used { color: var(--wiki-select-top); font-weight: 600; }
 .cpull-chunk { white-space: pre-wrap; font-family: var(--wiki-mono); font-size: 0.8rem; padding: 0.4rem 0.6rem; margin: 0; background: var(--wiki-code-bg); border: 1px solid var(--wiki-code-border); border-radius: 4px; }
 .cpull-chunk-auto { white-space: normal; border-style: dashed; }
 .cpull-chunk-auto pre { white-space: pre-wrap; font-size: 0.8rem; }
@@ -81,6 +102,16 @@
 /* The undo history: long descriptions wrap, undone rows are struck through. */
 .cpull-undo-text { white-space: pre-wrap; }
 .cpull-undone code, .cpull-undone .cpull-undo-text { text-decoration: line-through; }
+/* one row height whatever a transaction touched: its details flow on one wrapping line */
+.wiki-content .cpull-undo > tbody > tr > td { height: 2.75rem; }
+.cpull-undo-details { display: flex; flex-wrap: wrap; gap: 0.1rem 1rem; }
+.cpull-undone-pill { display: inline-block; margin-left: 0.25rem; padding: 0 0.45rem; border: 1px solid var(--bs-secondary-color); border-radius: 1rem;
+  font-size: 0.7rem; font-weight: 600; line-height: 1.35; color: var(--bs-body-color); text-decoration: none; vertical-align: 0.1em; }
 
 /* report flags keep their colour inside the line-number gutter's links */
 .cpull-code .cpull-num a.cpull-flag-icon { color: #d08700; }
+[data-bs-theme="dark"] .cpull-code .cpull-num a.cpull-flag-icon { color: #f0b429; }
+
+/* Code comments in dark mode: base16-ocean's #65737e is 3.0:1 on the code well (under
+   WCAG AA); the same hue lightened is 4.9:1. Same rule as the wiki's style.css. */
+[data-bs-theme="dark"] .hl-comment, [data-bs-theme="dark"] .hl-punctuation.hl-definition.hl-comment { color: #8a97a3; }

@@ -14,7 +14,7 @@
   <tbody>
   {% for r in page.rows %}
     <tr>
-      {% if page.has_ci %}<td class="text-center">{% if r.ci %}{{ ig.ci_ball(r.ci) }}{% endif %}</td>{% endif %}
+      {% if page.has_ci %}<td class="text-center">{% if r.ci %}{{ ig.ci_ball(r.ci) }}{% else %}<span class="tool-na">N/A</span>{% endif %}</td>{% endif %}
       <td><a href="{{ r.href }}"><code>{{ r.oid }}</code></a></td>
       <td>{% if r.summary_html %}<span class="fw-semibold">{{ r.summary_html }}</span> <a class="small" href="{{ r.href }}"><i class="bi bi-box-arrow-in-right"></i></a>{% else %}<a class="fw-semibold" href="{{ r.href }}">{{ r.summary }}</a>{% endif %}{% if r.merge %} <span class="badge text-bg-secondary">merge</span>{% endif %}{% if r.stats %}<div class="small text-body-secondary">{{ r.stats }}</div>{% endif %}</td>
       <td class="text-nowrap">{{ hx.person(r.author) }}</td>

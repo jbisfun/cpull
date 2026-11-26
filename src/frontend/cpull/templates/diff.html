@@ -3,7 +3,7 @@
 {% import "report.html" as rp %}
 {% block tasks_before %}{% if page.commit_href %}{{ ui.back(page.commit_href, "Back to Commit") }}{% endif %}{% endblock %}
 {% block content %}
-{{ ui.heading(page.heading, "", "file-diff") }}
+{{ ui.heading(page.heading, "", "file-earmark-diff") }}
 <p class="tool-meta">{% if page.compared %}Compared with <a href="{{ page.compared_href }}"><code>{{ page.compared }}</code></a> · {% elif page.commit_href %}A root commit: every file is new · {% endif %}<a href="{{ page.files_href }}">Browse files</a></p>
 {% if page.path %}<div class="small mb-2">Showing changes to <code>{{ page.path }}</code>. <a href="{{ page.all_href }}">Show all files</a></div>{% endif %}
 {% if page.empty %}{{ ui.empty(page.empty) }}{% endif %}
